@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chapoli M.I. Tank terrain model</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..800&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme: light;
+  --bg:#E8ECE9; --surface:#F6F8F6; --ink:#1D2729; --muted:#5A6A6C; --rule:#C9D2CE;
+  --accent:#0F6E6A; --accent-ink:#FFFFFF; --poly:#F2B11E; --water:#2F7FB8;
+  --viewport:#D5DDD9;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    color-scheme: dark;
+    --bg:#182022; --surface:#212B2D; --ink:#E3E9E6; --muted:#98A7A6; --rule:#34423F;
+    --accent:#5FB8AE; --accent-ink:#0E1A19; --poly:#FBC02D; --water:#5AA6DA;
+    --viewport:#121819;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Archivo",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px;line-height:1.5;font-variant-numeric:tabular-nums}
+.wrap{max-width:1400px;margin:0 auto;padding:28px 24px 48px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 32px;margin-bottom:20px}
+h1{font-size:clamp(28px,4.2vw,46px);line-height:1.02;margin:0;font-weight:780;font-stretch:72%;letter-spacing:-.01em}
+.sub{margin:6px 0 0;color:var(--muted);font-size:14px}
+.loadkml{display:flex;gap:8px;align-items:center}
+button,.btn{font:inherit;font-size:14px;font-weight:600;border:1px solid var(--rule);background:var(--surface);color:var(--ink);padding:7px 12px;border-radius:6px;cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button:hover{border-color:var(--accent)}
+button:focus-visible,input:focus-visible,label.seg:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px}
+@media (max-width:980px){.grid{grid-template-columns:1fr}}
+.view3d{position:relative;background:var(--viewport);border-radius:10px;overflow:hidden;height:min(68vh,640px);min-height:380px}
+.view3d canvas{display:block;width:100%;height:100%}
+.status{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:var(--muted);font-size:15px;pointer-events:none}
+.status.err{color:var(--ink);pointer-events:auto}
+.status.err div{max-width:460px;background:var(--surface);padding:18px 20px;border-radius:8px;border:1px solid var(--rule)}
+.north{position:absolute;top:14px;right:14px;width:44px;height:44px;border-radius:50%;background:var(--surface);border:1px solid var(--rule);display:flex;align-items:center;justify-content:center}
+.north svg{width:30px;height:30px;transition:none}
+.hint3d{position:absolute;left:14px;bottom:12px;font-size:12px;color:var(--muted);background:color-mix(in srgb,var(--surface) 80%,transparent);padding:3px 8px;border-radius:4px}
+aside{display:flex;flex-direction:column;gap:18px}
+.card{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:16px 18px}
+.card h2{font-size:17px;margin:0 0 10px;font-weight:700;font-stretch:90%}
+dl.stats{display:grid;grid-template-columns:auto auto;gap:4px 14px;margin:0}
+dl.stats dt{color:var(--muted)}
+dl.stats dd{margin:0;text-align:right;font-weight:600}
+.big{display:flex;gap:18px;margin-bottom:12px}
+.big div{flex:1}
+.big b{display:block;font-size:30px;font-weight:760;font-stretch:80%;line-height:1}
+.big span{font-size:13px;color:var(--muted)}
+.ctl{margin:12px 0 0}
+.ctl label.lbl{display:flex;justify-content:space-between;font-size:14px;margin-bottom:4px}
+.ctl input[type=range]{width:100%;accent-color:var(--accent)}
+.segs{display:flex;gap:0;border:1px solid var(--rule);border-radius:6px;overflow:hidden}
+label.seg{flex:1;text-align:center;font-size:13px;padding:6px 4px;cursor:pointer;position:relative}
+label.seg input{position:absolute;opacity:0;pointer-events:none}
+label.seg:has(input:checked){background:var(--accent);color:var(--accent-ink);font-weight:600}
+.check{display:flex;gap:8px;align-items:center;font-size:14px;margin-top:10px}
+.check input{accent-color:var(--accent)}
+.legend{height:12px;border-radius:3px;margin-top:6px}
+.legendlbl{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+.dl{display:flex;flex-wrap:wrap;gap:8px}
+.lower{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px;margin-top:20px}
+@media (max-width:980px){.lower{grid-template-columns:1fr}}
+.planwrap{position:relative;background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:14px}
+.planwrap h2{font-size:17px;margin:0 0 8px;font-weight:700;font-stretch:90%}
+#plan{display:block;width:100%;border-radius:4px;cursor:crosshair}
+.readout{font-size:13px;color:var(--muted);margin-top:8px;min-height:20px}
+.readout b{color:var(--ink)}
+.tablewrap{max-height:420px;overflow:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:4px 6px;text-align:right;border-bottom:1px solid var(--rule)}
+th{position:sticky;top:0;background:var(--surface);font-weight:650;color:var(--muted)}
+tr.hl td{background:color-mix(in srgb,var(--water) 18%,transparent);font-weight:650}
+.note{font-size:12.5px;color:var(--muted);margin:10px 0 0}
+footer{margin-top:28px;font-size:12.5px;color:var(--muted);max-width:80ch}
+footer p{margin:4px 0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1 id="title">Chapoli M.I. Tank terrain model</h1>
+      <p class="sub" id="subtitle">Digital terrain model of the KML polygon and its surroundings</p>
+    </div>
+    <div class="loadkml">
+      <input type="file" id="kmlfile" accept=".kml" hidden>
+      <button id="loadbtn" type="button">Load another KML</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="view3d" id="view3d">
+      <div class="status" id="status">Loading elevation data…</div>
+      <div class="north" title="North"><svg id="northsvg" viewBox="0 0 30 30" aria-label="North arrow"><path d="M15 3 L21 22 L15 18 L9 22 Z" fill="currentColor"/><text x="15" y="29" font-size="7" text-anchor="middle" fill="currentColor" font-weight="700">N</text></svg></div>
+      <div class="hint3d">Drag to rotate, right-drag to pan, scroll to zoom</div>
+    </div>
+
+    <aside>
+      <div class="card">
+        <h2>Inside the polygon</h2>
+        <div class="big">
+          <div><b id="s-min">–</b><span>lowest, m</span></div>
+          <div><b id="s-max">–</b><span>highest, m</span></div>
+          <div><b id="s-rel">–</b><span>relief, m</span></div>
+        </div>
+        <dl class="stats">
+          <dt>Mean elevation</dt><dd id="s-mean">–</dd>
+          <dt>Polygon area</dt><dd id="s-area">–</dd>
+          <dt>Perimeter</dt><dd id="s-per">–</dd>
+          <dt>Centroid</dt><dd id="s-cen">–</dd>
+          <dt>Lowest point at</dt><dd id="s-lowpt">–</dd>
+          <dt>DTM grid</dt><dd id="s-grid">–</dd>
+        </dl>
+      </div>
+
+      <div class="card">
+        <h2>View</h2>
+        <div class="segs" role="radiogroup" aria-label="Surface">
+          <label class="seg"><input type="radio" name="tex" value="dem" checked>Elevation</label>
+          <label class="seg"><input type="radio" name="tex" value="sat">Satellite</label>
+        </div>
+        <label class="check"><input type="checkbox" id="contours" checked>Show contours</label>
+        <div class="ctl">
+          <label class="lbl" for="exag"><span>Vertical exaggeration</span><span id="exagv">2.5×</span></label>
+          <input type="range" id="exag" min="1" max="10" step="0.5" value="2.5">
+        </div>
+        <div class="ctl">
+          <label class="lbl" for="wl"><span>Water level</span><span id="wlv">off</span></label>
+          <input type="range" id="wl" min="0" max="1" step="0.1" value="0">
+        </div>
+        <div class="legend" id="legend"></div>
+        <div class="legendlbl"><span id="lg-min"></span><span id="lg-mid"></span><span id="lg-max"></span></div>
+        <div style="margin-top:12px"><button type="button" id="resetview">Reset view</button></div>
+      </div>
+
+      <div class="card">
+        <h2>Download</h2>
+        <div class="dl">
+          <button type="button" class="primary" id="dl-asc">DTM grid (.asc)</button>
+          <button type="button" id="dl-xyz">XYZ points (.csv)</button>
+          <button type="button" id="dl-eac">Area–capacity (.csv)</button>
+          <button type="button" id="dl-plan">Plan view (.png)</button>
+          <button type="button" id="dl-3d">3D view (.png)</button>
+        </div>
+        <p class="note">The .asc grid opens directly in QGIS or ArcGIS. Coordinates are WGS 84 longitude/latitude (EPSG:4326), heights in metres above mean sea level.</p>
+      </div>
+    </aside>
+  </div>
+
+  <div class="lower">
+    <div class="planwrap">
+      <h2>Plan view with contours</h2>
+      <canvas id="plan" aria-label="Shaded relief map with contours and the polygon outline"></canvas>
+      <div class="readout" id="readout">Move over the map to read elevations.</div>
+    </div>
+    <div class="card">
+      <h2>Elevation–area–capacity</h2>
+      <div class="tablewrap"><table id="eac"><thead><tr><th>Level (m)</th><th>Water spread (ha)</th><th>Volume (thousand m³)</th></tr></thead><tbody></tbody></table></div>
+      <p class="note">Computed inside the polygon from the DTM. Satellite radar measures the water surface where the tank held water when the data was captured, so volumes below that surface are underestimated. Use a bathymetric survey for design capacity.</p>
+    </div>
+  </div>
+
+  <footer>
+    <p>Elevation: AWS Terrain Tiles (Mapzen/Tilezen), derived mainly from SRTM at about 30 m resolution in this region; vertical accuracy is typically a few metres. Satellite imagery: Esri, Maxar, Earthstar Geographics.</p>
+    <p>This page needs an internet connection to fetch the elevation tiles each time it opens.</p>
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+"use strict";
+// ---------- Polygon from Chapoli_M_I__Tank_.kml ----------
+let NAME = "Chapoli M.I. Tank";
+let RINGS = [[
+  [74.04203984510276,15.03062575773112],[74.04287856574848,15.01905766479928],
+  [74.05530204310574,15.01941183850954],[74.05434250464518,15.03068813398546],
+  [74.04333566859614,15.0306015641466],[74.04203984510276,15.03062575773112]
+]];
+
+const DEM_Z = 15, SAT_Z = 17, TILE = 256, GRID_N = 260;
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+// ---------- Web Mercator helpers ----------
+const lon2px = (lon, z) => (lon + 180) / 360 * TILE * Math.pow(2, z);
+const lat2px = (lat, z) => { const s = Math.sin(lat * Math.PI / 180); return (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * TILE * Math.pow(2, z); };
+
+function loadImg(url){
+  return new Promise((res, rej) => { const im = new Image(); im.crossOrigin = "anonymous"; im.onload = () => res(im); im.onerror = () => rej(new Error(url)); im.src = url; });
+}
+
+async function mosaic(bb, z, urlFn){
+  const x0 = Math.floor(lon2px(bb.w, z) / TILE), x1 = Math.floor(lon2px(bb.e, z) / TILE);
+  const y0 = Math.floor(lat2px(bb.n, z) / TILE), y1 = Math.floor(lat2px(bb.s, z) / TILE);
+  const cv = document.createElement("canvas");
+  cv.width = (x1 - x0 + 1) * TILE; cv.height = (y1 - y0 + 1) * TILE;
+  const ctx = cv.getContext("2d", { willReadFrequently: true });
+  const jobs = [];
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++)
+    jobs.push(loadImg(urlFn(z, x, y)).then(im => ctx.drawImage(im, (x - x0) * TILE, (y - y0) * TILE)));
+  await Promise.all(jobs);
+  return { cv, ctx, ox: x0 * TILE, oy: y0 * TILE, z };
+}
+
+// ---------- Geometry ----------
+function bboxOf(rings){
+  let w = 180, e = -180, s = 90, n = -90;
+  rings.forEach(r => r.forEach(([x, y]) => { w = Math.min(w, x); e = Math.max(e, x); s = Math.min(s, y); n = Math.max(n, y); }));
+  return { w, e, s, n };
+}
+function inRing(x, y, r){
+  let c = false;
+  for (let i = 0, j = r.length - 1; i < r.length; j = i++){
+    const [xi, yi] = r[i], [xj, yj] = r[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c;
+  }
+  return c;
+}
+const inPoly = (x, y) => RINGS.some(r => inRing(x, y, r));
+function ringMetrics(r, latc){
+  const kx = 111320 * Math.cos(latc * Math.PI / 180), ky = 110574;
+  let a = 0, p = 0, cx = 0, cy = 0;
+  for (let i = 0; i < r.length - 1; i++){
+    const [x1, y1] = r[i], [x2, y2] = r[i + 1];
+    const cr = x1 * y2 - x2 * y1; a += cr; cx += (x1 + x2) * cr; cy += (y1 + y2) * cr;
+    p += Math.hypot((x2 - x1) * kx, (y2 - y1) * ky);
+  }
+  const A = a / 2;
+  return { area: Math.abs(A) * kx * ky, per: p, cx: cx / (6 * A), cy: cy / (6 * A) };
+}
+
+// ---------- Build the DTM grid ----------
+let G = null;   // grid
+let SAT = null; // satellite mosaic
+
+function buildGrid(m, bb){
+  const span = Math.max(bb.e - bb.w, bb.n - bb.s);
+  const cell = span / (GRID_N - 1);
+  const nx = Math.round((bb.e - bb.w) / cell) + 1, ny = Math.round((bb.n - bb.s) / cell) + 1;
+  const w = bb.w, n = bb.n, e = w + (nx - 1) * cell, s = n - (ny - 1) * cell;
+  const W = m.cv.width, H = m.cv.height;
+  const d = m.ctx.getImageData(0, 0, W, H).data;
+  const raw = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) raw[i] = d[4*i] * 256 + d[4*i+1] + d[4*i+2] / 256 - 32768;
+  const sample = (lon, lat) => {
+    let px = lon2px(lon, m.z) - m.ox - 0.5, py = lat2px(lat, m.z) - m.oy - 0.5;
+    px = Math.max(0, Math.min(W - 1.001, px)); py = Math.max(0, Math.min(H - 1.001, py));
+    const x0 = Math.floor(px), y0 = Math.floor(py), fx = px - x0, fy = py - y0;
+    const a = raw[y0*W + x0], b = raw[y0*W + x0 + 1], c = raw[(y0+1)*W + x0], dd = raw[(y0+1)*W + x0 + 1];
+    return a*(1-fx)*(1-fy) + b*fx*(1-fy) + c*(1-fx)*fy + dd*fx*fy;
+  };
+  const z = new Float32Array(nx * ny), inside = new Uint8Array(nx * ny);
+  let minA = Infinity, maxA = -Infinity;
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++){
+    const lon = w + i * cell, lat = n - j * cell, k = j * nx + i;
+    const v = sample(lon, lat); z[k] = v; inside[k] = inPoly(lon, lat) ? 1 : 0;
+    if (v < minA) minA = v; if (v > maxA) maxA = v;
+  }
+  const latc = (n + s) / 2;
+  return { nx, ny, cell, w, n, e, s, z, inside, minA, maxA, latc,
+           dxm: cell * 111320 * Math.cos(latc * Math.PI / 180), dym: cell * 110574 };
+}
+function gridAt(lon, lat){
+  const fi = (lon - G.w) / G.cell, fj = (G.n - lat) / G.cell;
+  const i0 = Math.max(0, Math.min(G.nx - 2, Math.floor(fi))), j0 = Math.max(0, Math.min(G.ny - 2, Math.floor(fj)));
+  const fx = Math.max(0, Math.min(1, fi - i0)), fy = Math.max(0, Math.min(1, fj - j0)), nx = G.nx, z = G.z;
+  return z[j0*nx+i0]*(1-fx)*(1-fy) + z[j0*nx+i0+1]*fx*(1-fy) + z[(j0+1)*nx+i0]*(1-fx)*fy + z[(j0+1)*nx+i0+1]*fx*fy;
+}
+
+// ---------- Stats & capacity ----------
+let STATS = null, EAC = [];
+function computeStats(){
+  let mn = Infinity, mx = -Infinity, sum = 0, cnt = 0, lowK = -1;
+  for (let k = 0; k < G.z.length; k++) if (G.inside[k]){
+    const v = G.z[k]; sum += v; cnt++;
+    if (v < mn){ mn = v; lowK = k; } if (v > mx) mx = v;
+  }
+  let area = 0, per = 0, cx = 0, cy = 0;
+  RINGS.forEach(r => { const m = ringMetrics(r, G.latc); area += m.area; per += m.per; cx += m.cx * m.area; cy += m.cy * m.area; });
+  cx /= area; cy /= area;
+  STATS = { mn, mx, mean: cnt ? sum / cnt : NaN, cnt, area, per, cx, cy,
+            lowLon: G.w + (lowK % G.nx) * G.cell, lowLat: G.n - Math.floor(lowK / G.nx) * G.cell };
+  // elevation–area–capacity
+  EAC = [];
+  if (!cnt) return;
+  const rel = mx - mn, step = niceStep(rel / 14), cellA = G.dxm * G.dym;
+  for (let L = Math.ceil(mn / step) * step; L <= Math.ceil(mx / step) * step + 1e-6; L += step){
+    const r = levelAV(L); EAC.push({ L, a: r.a, v: r.v });
+  }
+  function niceStep(x){ for (const s of [0.5,1,2,5,10,20,25,50,100]) if (s >= x) return s; return 200; }
+}
+function levelAV(L){
+  const cellA = G.dxm * G.dym; let c = 0, v = 0;
+  for (let k = 0; k < G.z.length; k++) if (G.inside[k] && G.z[k] < L){ c++; v += (L - G.z[k]) * cellA; }
+  return { a: c * cellA, v };
+}
+
+// ---------- Colour ramp & shading ----------
+const RAMP = [[0,[44,104,86]],[0.22,[103,152,92]],[0.45,[176,190,110]],[0.65,[214,184,120]],[0.84,[168,116,78]],[1,[238,232,222]]];
+function ramp(t){
+  t = Math.max(0, Math.min(1, t));
+  for (let i = 1; i < RAMP.length; i++) if (t <= RAMP[i][0]){
+    const [t0, c0] = RAMP[i-1], [t1, c1] = RAMP[i], f = (t - t0) / (t1 - t0);
+    return c0.map((c, j) => c + (c1[j] - c) * f);
+  }
+  return RAMP[RAMP.length-1][1];
+}
+let DEMIMG = null;
+function buildDemImage(){
+  const { nx, ny, z, dxm, dym, minA, maxA } = G;
+  const cv = document.createElement("canvas"); cv.width = nx; cv.height = ny;
+  const ctx = cv.getContext("2d"), img = ctx.createImageData(nx, ny);
+  const zen = (90 - 45) * Math.PI / 180, az = (360 - 315 + 90) * Math.PI / 180, zf = 2;
+  const Z = (i, j) => z[Math.max(0, Math.min(ny-1, j)) * nx + Math.max(0, Math.min(nx-1, i))];
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++){
+    const a = Z(i-1,j-1), b = Z(i,j-1), c = Z(i+1,j-1), d = Z(i-1,j), f = Z(i+1,j), g = Z(i-1,j+1), h = Z(i,j+1), ii = Z(i+1,j+1);
+    const dzdx = ((c + 2*f + ii) - (a + 2*d + g)) / (8 * dxm), dzdy = ((g + 2*h + ii) - (a + 2*b + c)) / (8 * dym);
+    const slope = Math.atan(zf * Math.hypot(dzdx, dzdy));
+    let asp = Math.atan2(dzdy, -dzdx); if (asp < 0) asp += 2 * Math.PI;
+    let hs = Math.cos(zen) * Math.cos(slope) + Math.sin(zen) * Math.sin(slope) * Math.cos(az - asp);
+    hs = Math.max(0, hs);
+    const col = ramp((z[j*nx+i] - minA) / (maxA - minA || 1)), sh = 0.5 + 0.6 * hs, k = 4 * (j*nx + i);
+    img.data[k] = Math.min(255, col[0]*sh); img.data[k+1] = Math.min(255, col[1]*sh); img.data[k+2] = Math.min(255, col[2]*sh); img.data[k+3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  DEMIMG = cv;
+}
+
+// ---------- Contours (marching squares) ----------
+let CONT = { step: 5, lines: [] };
+function buildContours(){
+  const rel = G.maxA - G.minA;
+  let step = 1; for (const s of [1,2,5,10,20,25,50,100]) { step = s; if (rel / s <= 22) break; }
+  const lines = [], { nx, ny, z } = G;
+  for (let L = Math.ceil(G.minA / step) * step; L < G.maxA; L += step){
+    const segs = [];
+    for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++){
+      const v0 = z[j*nx+i], v1 = z[j*nx+i+1], v2 = z[(j+1)*nx+i+1], v3 = z[(j+1)*nx+i];
+      const pts = [];
+      const ed = (va, vb, xa, ya, xb, yb) => { if ((va < L) !== (vb < L)){ const t = (L - va) / (vb - va); pts.push([xa + (xb - xa) * t, ya + (yb - ya) * t]); } };
+      ed(v0, v1, i, j, i+1, j); ed(v1, v2, i+1, j, i+1, j+1); ed(v2, v3, i+1, j+1, i, j+1); ed(v3, v0, i, j+1, i, j);
+      if (pts.length >= 2) segs.push(pts[0], pts[1]);
+      if (pts.length === 4) segs.push(pts[2], pts[3]);
+    }
+    lines.push({ L, idx: Math.round(L / step) % 5 === 0, segs });
+  }
+  CONT = { step, lines };
+}
+
+// ---------- Drawing a map into any canvas (node-aligned) ----------
+function drawMap(ctx, W, H, opt){
+  const sx = W / (G.nx - 1), sy = H / (G.ny - 1);
+  ctx.save();
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+  if (opt.base === "sat" && SAT){
+    const m = SAT, x0 = lon2px(G.w, m.z) - m.ox, x1 = lon2px(G.e, m.z) - m.ox, y0 = lat2px(G.n, m.z) - m.oy, y1 = lat2px(G.s, m.z) - m.oy;
+    ctx.drawImage(m.cv, x0, y0, x1 - x0, y1 - y0, 0, 0, W, H);
+  } else {
+    ctx.drawImage(DEMIMG, 0.5, 0.5, G.nx - 1, G.ny - 1, 0, 0, W, H);
+  }
+  const lw = opt.lw || 1;
+  if (opt.contours){
+    const dark = opt.base === "sat";
+    CONT.lines.forEach(l => {
+      ctx.beginPath();
+      for (let k = 0; k < l.segs.length; k += 2){ ctx.moveTo(l.segs[k][0]*sx, l.segs[k][1]*sy); ctx.lineTo(l.segs[k+1][0]*sx, l.segs[k+1][1]*sy); }
+      ctx.strokeStyle = dark ? (l.idx ? "rgba(255,255,255,.85)" : "rgba(255,255,255,.45)") : (l.idx ? "rgba(52,34,20,.75)" : "rgba(52,34,20,.35)");
+      ctx.lineWidth = (l.idx ? 1.6 : 0.8) * lw; ctx.stroke();
+    });
+    if (opt.labels) labelContours(ctx, sx, sy, lw, dark);
+  }
+  // polygon
+  const poly = css("--poly") || "#F2B11E";
+  RINGS.forEach(r => {
+    ctx.beginPath();
+    r.forEach(([lon, lat], k) => { const x = (lon - G.w) / G.cell * sx, y = (G.n - lat) / G.cell * sy; k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.closePath();
+    ctx.fillStyle = "rgba(251,192,45,.10)"; ctx.fill();
+    ctx.lineJoin = "round"; ctx.strokeStyle = "rgba(0,0,0,.55)"; ctx.lineWidth = 5 * lw; ctx.stroke();
+    ctx.strokeStyle = poly; ctx.lineWidth = 2.6 * lw; ctx.stroke();
+  });
+  ctx.restore();
+}
+function labelContours(ctx, sx, sy, lw, dark){
+  ctx.font = `600 ${11 * lw}px Archivo, system-ui, sans-serif`;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  CONT.lines.forEach(l => {
+    if (!l.idx || !l.segs.length) return;
+    const n = l.segs.length, picks = n > 400 ? [0.3, 0.75] : [0.5];
+    picks.forEach(p => {
+      const a = l.segs[Math.floor(n * p / 2) * 2], b = l.segs[Math.floor(n * p / 2) * 2 + 1];
+      const x = (a[0] + b[0]) / 2 * sx, y = (a[1] + b[1]) / 2 * sy;
+      const t = String(Math.round(l.L));
+      ctx.lineWidth = 3 * lw; ctx.strokeStyle = dark ? "rgba(0,0,0,.7)" : "rgba(255,255,255,.85)"; ctx.strokeText(t, x, y);
+      ctx.fillStyle = dark ? "#fff" : "#3a2614"; ctx.fillText(t, x, y);
+    });
+  });
+}
+
+// ---------- Plan view ----------
+const plan = $("plan");
+function drawPlan(){
+  if (!G) return;
+  const W = plan.clientWidth, H = W * ((G.ny - 1) * G.dym) / ((G.nx - 1) * G.dxm), dpr = Math.min(2, window.devicePixelRatio || 1);
+  plan.width = Math.round(W * dpr); plan.height = Math.round(H * dpr); plan.style.height = H + "px";
+  const ctx = plan.getContext("2d");
+  drawMap(ctx, plan.width, plan.height, { base: "dem", contours: $("contours").checked, labels: true, lw: dpr });
+  // scale bar
+  const mpp = (G.nx - 1) * G.dxm / plan.width;
+  let len = 100; for (const L of [100, 200, 250, 500, 1000]) if (L / mpp < plan.width * 0.25) len = L;
+  const px = len / mpp, x = 14 * dpr, y = plan.height - 16 * dpr;
+  ctx.fillStyle = "rgba(255,255,255,.85)"; ctx.fillRect(x - 6*dpr, y - 18*dpr, px + 12*dpr, 26*dpr);
+  ctx.fillStyle = "#1D2729"; ctx.fillRect(x, y, px, 3 * dpr);
+  ctx.font = `600 ${11*dpr}px Archivo, system-ui, sans-serif`; ctx.textAlign = "left"; ctx.textBaseline = "bottom";
+  ctx.fillText(len >= 1000 ? (len/1000) + " km" : len + " m", x, y - 2*dpr);
+}
+plan.addEventListener("mousemove", ev => {
+  if (!G) return;
+  const r = plan.getBoundingClientRect();
+  const fi = (ev.clientX - r.left) / r.width * (G.nx - 1), fj = (ev.clientY - r.top) / r.height * (G.ny - 1);
+  const lon = G.w + fi * G.cell, lat = G.n - fj * G.cell, e = gridAt(lon, lat);
+  $("readout").innerHTML = `<b>${e.toFixed(1)} m</b> at ${lat.toFixed(5)}° N, ${lon.toFixed(5)}° E ${inPoly(lon, lat) ? "· inside polygon" : ""}`;
+});
+plan.addEventListener("mouseleave", () => $("readout").textContent = "Move over the map to read elevations.");
+
+// ---------- 3D ----------
+const host = $("view3d");
+let renderer, scene, camera, controls, group, terrain, skirt, water, texCanvas, texture;
+function init3D(){
+  renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  host.prepend(renderer.domElement);
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(40, 1, 1, 100000);
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true; controls.dampingFactor = 0.08; controls.maxPolarAngle = Math.PI * 0.49;
+  scene.add(new THREE.AmbientLight(0xffffff, 0.62));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.55); sun.position.set(-1, 1.4, -0.8); scene.add(sun);
+  group = new THREE.Group(); group.rotation.x = -Math.PI / 2; scene.add(group);
+  new ResizeObserver(resize3D).observe(host); resize3D();
+  (function loop(){ requestAnimationFrame(loop); controls.update();
+    $("northsvg").style.transform = `rotate(${controls.getAzimuthalAngle()}rad)`;
+    renderer.render(scene, camera); })();
+}
+function resize3D(){ const w = host.clientWidth, h = host.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+function clearGroup(){ while (group.children.length){ const o = group.children.pop(); o.geometry && o.geometry.dispose(); o.material && o.material.dispose(); } }
+
+function build3D(){
+  clearGroup();
+  const Wm = (G.nx - 1) * G.dxm, Hm = (G.ny - 1) * G.dym;
+  texCanvas = document.createElement("canvas");
+  texCanvas.width = 2048; texCanvas.height = Math.round(2048 * Hm / Wm);
+  texture = new THREE.CanvasTexture(texCanvas);
+  texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  paintTexture();
+  const geo = new THREE.PlaneGeometry(Wm, Hm, G.nx - 1, G.ny - 1);
+  terrain = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: texture }));
+  group.add(terrain);
+  water = new THREE.Mesh(new THREE.PlaneGeometry(Wm, Hm), new THREE.MeshLambertMaterial({ color: new THREE.Color(css("--water") || "#2F7FB8"), transparent: true, opacity: 0.5, depthWrite: false }));
+  water.visible = false; group.add(water);
+  applyExag();
+  resetView();
+}
+function applyExag(){
+  const ex = +$("exag").value, pos = terrain.geometry.attributes.position, base = G.minA;
+  for (let k = 0; k < G.z.length; k++) pos.setZ(k, (G.z[k] - base) * ex);
+  pos.needsUpdate = true; terrain.geometry.computeVertexNormals(); terrain.geometry.computeBoundingSphere();
+  // solid base skirt
+  if (skirt){ group.remove(skirt); skirt.geometry.dispose(); skirt.material.dispose(); }
+  const depth = -Math.max(15, (G.maxA - G.minA) * 0.25) * ex, P = [], nx = G.nx, ny = G.ny;
+  const edge = [];
+  for (let i = 0; i < nx; i++) edge.push(i);
+  for (let j = 1; j < ny; j++) edge.push(j * nx + nx - 1);
+  for (let i = nx - 2; i >= 0; i--) edge.push((ny - 1) * nx + i);
+  for (let j = ny - 2; j >= 0; j--) edge.push(j * nx);
+  for (let q = 0; q < edge.length - 1; q++){
+    const a = edge[q], b = edge[q + 1];
+    const ax = pos.getX(a), ay = pos.getY(a), az = pos.getZ(a), bx = pos.getX(b), by = pos.getY(b), bz = pos.getZ(b);
+    P.push(ax, ay, az, bx, by, bz, bx, by, depth, ax, ay, az, bx, by, depth, ax, ay, depth);
+  }
+  const sg = new THREE.BufferGeometry(); sg.setAttribute("position", new THREE.Float32BufferAttribute(P, 3)); sg.computeVertexNormals();
+  skirt = new THREE.Mesh(sg, new THREE.MeshLambertMaterial({ color: 0x8a7560, side: THREE.DoubleSide }));
+  group.add(skirt);
+  $("exagv").textContent = ex + "×";
+  applyWater();
+}
+function applyWater(){
+  const t = +$("wl").value;
+  if (!STATS || !STATS.cnt || t <= 0){ water.visible = false; $("wlv").textContent = "off"; highlightEAC(null); return; }
+  const L = STATS.mn + t * (STATS.mx - STATS.mn), ex = +$("exag").value;
+  water.visible = true; water.position.z = (L - G.minA) * ex;
+  const r = levelAV(L);
+  $("wlv").textContent = `${L.toFixed(1)} m · ${(r.a / 1e4).toFixed(1)} ha · ${(r.v / 1e3).toFixed(0)} k m³`;
+  highlightEAC(L);
+}
+function paintTexture(){
+  const ctx = texCanvas.getContext("2d"), base = document.querySelector('input[name=tex]:checked').value;
+  drawMap(ctx, texCanvas.width, texCanvas.height, { base, contours: $("contours").checked, labels: false, lw: 2.2 });
+  texture.needsUpdate = true;
+}
+function resetView(){
+  const Wm = (G.nx - 1) * G.dxm, Hm = (G.ny - 1) * G.dym, R = Math.max(Wm, Hm), ex = +$("exag").value;
+  const midY = (G.maxA - G.minA) * ex * 0.4;
+  controls.target.set(0, midY, 0);
+  camera.position.set(R * 0.35, R * 0.75, R * 0.95);
+  camera.near = R / 500; camera.far = R * 20; camera.updateProjectionMatrix();
+  controls.update();
+}
+
+// ---------- Panel ----------
+function fillPanel(){
+  const S = STATS, f1 = v => isFinite(v) ? v.toFixed(1) : "–";
+  $("s-min").textContent = f1(S.mn); $("s-max").textContent = f1(S.mx); $("s-rel").textContent = f1(S.mx - S.mn);
+  $("s-mean").textContent = f1(S.mean) + " m";
+  $("s-area").textContent = `${(S.area / 1e4).toFixed(2)} ha (${(S.area / 1e6).toFixed(3)} km²)`;
+  $("s-per").textContent = `${(S.per / 1000).toFixed(2)} km`;
+  $("s-cen").textContent = `${S.cy.toFixed(5)}° N, ${S.cx.toFixed(5)}° E`;
+  $("s-lowpt").textContent = S.cnt ? `${S.lowLat.toFixed(5)}° N, ${S.lowLon.toFixed(5)}° E` : "–";
+  $("s-grid").textContent = `${G.nx} × ${G.ny}, ≈${G.dym.toFixed(1)} m cells`;
+  const stops = RAMP.map(([t, c]) => `rgb(${c.join(",")}) ${t * 100}%`).join(",");
+  $("legend").style.background = `linear-gradient(90deg,${stops})`;
+  $("lg-min").textContent = G.minA.toFixed(0) + " m"; $("lg-mid").textContent = `contours every ${CONT.step} m`; $("lg-max").textContent = G.maxA.toFixed(0) + " m";
+  const tb = $("eac").querySelector("tbody"); tb.innerHTML = "";
+  EAC.forEach(r => { const tr = document.createElement("tr"); tr.dataset.l = r.L;
+    tr.innerHTML = `<td>${r.L.toFixed(1)}</td><td>${(r.a / 1e4).toFixed(2)}</td><td>${(r.v / 1e3).toFixed(1)}</td>`; tb.appendChild(tr); });
+  if (!EAC.length) tb.innerHTML = `<tr><td colspan="3" style="text-align:left">The polygon is smaller than one grid cell, so no table can be computed.</td></tr>`;
+}
+function highlightEAC(L){
+  document.querySelectorAll("#eac tbody tr").forEach(tr => tr.classList.remove("hl"));
+  if (L == null) return;
+  let best = null, bd = Infinity;
+  document.querySelectorAll("#eac tbody tr").forEach(tr => { const d = Math.abs(+tr.dataset.l - L); if (d < bd){ bd = d; best = tr; } });
+  best && best.classList.add("hl");
+}
+
+// ---------- Downloads ----------
+const slug = () => NAME.replace(/[^\w]+/g, "_").replace(/^_|_$/g, "");
+function save(blob, name){ const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
+$("dl-asc").onclick = () => {
+  if (!G) return;
+  const L = [`ncols ${G.nx}`, `nrows ${G.ny}`, `xllcenter ${G.w.toFixed(9)}`, `yllcenter ${G.s.toFixed(9)}`, `cellsize ${G.cell.toFixed(10)}`, `NODATA_value -9999`];
+  for (let j = 0; j < G.ny; j++){ const row = []; for (let i = 0; i < G.nx; i++) row.push(G.z[j*G.nx+i].toFixed(2)); L.push(row.join(" ")); }
+  save(new Blob([L.join("\n") + "\n"], { type: "text/plain" }), slug() + "_DTM.asc");
+  const prj = 'GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]';
+  setTimeout(() => save(new Blob([prj], { type: "text/plain" }), slug() + "_DTM.prj"), 400);
+};
+$("dl-xyz").onclick = () => {
+  if (!G) return;
+  const L = ["longitude,latitude,elevation_m,inside_polygon"];
+  for (let j = 0; j < G.ny; j++) for (let i = 0; i < G.nx; i++){ const k = j*G.nx+i;
+    L.push(`${(G.w + i*G.cell).toFixed(7)},${(G.n - j*G.cell).toFixed(7)},${G.z[k].toFixed(2)},${G.inside[k]}`); }
+  save(new Blob([L.join("\n")], { type: "text/csv" }), slug() + "_XYZ.csv");
+};
+$("dl-eac").onclick = () => {
+  const L = ["level_m,water_spread_ha,volume_m3"].concat(EAC.map(r => `${r.L.toFixed(2)},${(r.a/1e4).toFixed(3)},${r.v.toFixed(0)}`));
+  save(new Blob([L.join("\n")], { type: "text/csv" }), slug() + "_area_capacity.csv");
+};
+$("dl-plan").onclick = () => plan.toBlob(b => save(b, slug() + "_plan.png"));
+$("dl-3d").onclick = () => renderer.domElement.toBlob(b => b ? save(b, slug() + "_3D.png") : alert("The 3D view can’t be saved while satellite imagery is shown from a server that blocks it."));
+
+// ---------- Controls ----------
+$("exag").oninput = () => G && (applyExag());
+$("wl").oninput = () => G && applyWater();
+$("contours").onchange = () => { if (!G) return; drawPlan(); paintTexture(); };
+$("resetview").onclick = () => G && resetView();
+document.querySelectorAll('input[name=tex]').forEach(r => r.onchange = async () => {
+  if (!G) return;
+  if (r.value === "sat" && r.checked && !SAT){
+    setStatus("Loading satellite imagery…");
+    try {
+      const m = await mosaic({ w: G.w, e: G.e, n: G.n, s: G.s }, SAT_Z, (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`);
+      m.ctx.getImageData(0, 0, 1, 1); // throws if the server blocked cross-origin use
+      SAT = m; setStatus(null);
+    } catch (e){
+      document.querySelector('input[name=tex][value=dem]').checked = true;
+      setStatus("Satellite imagery couldn’t be loaded. Check your internet connection and try again.", true);
+      setTimeout(() => setStatus(null), 4000);
+    }
+  }
+  paintTexture();
+});
+window.addEventListener("resize", () => drawPlan());
+
+function setStatus(msg, err){
+  const s = $("status");
+  if (!msg){ s.style.display = "none"; return; }
+  s.style.display = "flex"; s.className = "status" + (err ? " err" : "");
+  s.innerHTML = err ? `<div>${msg}</div>` : msg;
+}
+
+// ---------- KML loading ----------
+$("loadbtn").onclick = () => $("kmlfile").click();
+$("kmlfile").onchange = async ev => {
+  const f = ev.target.files[0]; if (!f) return;
+  try {
+    const doc = new DOMParser().parseFromString(await f.text(), "application/xml");
+    const rings = [...doc.getElementsByTagNameNS("*", "outerBoundaryIs")].map(ob => {
+      const c = ob.getElementsByTagNameNS("*", "coordinates")[0];
+      return c ? c.textContent.trim().split(/\s+/).map(t => t.split(",").map(Number)).filter(p => p.length >= 2 && isFinite(p[0]) && isFinite(p[1])).map(p => [p[0], p[1]]) : [];
+    }).filter(r => r.length >= 3);
+    if (!rings.length) throw new Error("no polygon");
+    rings.forEach(r => { const a = r[0], b = r[r.length-1]; if (a[0] !== b[0] || a[1] !== b[1]) r.push([a[0], a[1]]); });
+    RINGS = rings;
+    const nm = doc.getElementsByTagNameNS("*", "name")[0];
+    NAME = (nm && nm.textContent.replace(/\.kml$/i, "").trim()) || f.name.replace(/\.kml$/i, "");
+    SAT = null; document.querySelector('input[name=tex][value=dem]').checked = true; $("wl").value = 0;
+    run();
+  } catch (e){
+    setStatus("That file has no polygon this page can read. Choose a KML that contains at least one Polygon.", true);
+  } finally { ev.target.value = ""; }
+};
+
+// ---------- Main ----------
+async function run(){
+  $("title").textContent = NAME + " terrain model";
+  document.title = NAME + " terrain model";
+  setStatus("Loading elevation data…");
+  try {
+    const bb = bboxOf(RINGS), pad = Math.max(bb.e - bb.w, bb.n - bb.s) * 0.3;
+    const ex = { w: bb.w - pad, e: bb.e + pad, s: bb.s - pad, n: bb.n + pad };
+    const m = await mosaic(ex, DEM_Z, (z, x, y) => `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`);
+    G = buildGrid(m, ex);
+    computeStats(); buildDemImage(); buildContours();
+    $("wl").step = 0.01;
+    $("subtitle").textContent = `Digital terrain model of the polygon and about ${Math.round(pad * 111320)} m of surrounding ground, centred near ${STATS.cy.toFixed(4)}° N, ${STATS.cx.toFixed(4)}° E`;
+    fillPanel(); drawPlan(); build3D();
+    setStatus(null);
+  } catch (e){
+    console.error(e);
+    setStatus("Elevation tiles couldn’t be loaded from AWS Terrain Tiles. Connect to the internet and reload this page. If you’re on a work network, it may be blocking s3.amazonaws.com.", true);
+  }
+}
+
+if (!window.THREE || !THREE.OrbitControls){
+  setStatus("The 3D library didn’t load. Connect to the internet and reload this page.", true);
+} else { init3D(); run(); }
+</script>
+</body>
+</html>
