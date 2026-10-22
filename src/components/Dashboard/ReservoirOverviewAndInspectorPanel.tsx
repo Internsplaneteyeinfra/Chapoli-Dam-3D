@@ -39,11 +39,21 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
   const deepestBed = specs.deepestBedLevel_m ?? 15.50;
   const maxWaterDepth = Math.max(0, waterLevel - deepestBed);
 
+  const isCurrentlySubmerged = Boolean(
+    inspection &&
+    inspection.elevation !== null &&
+    inspection.elevation < waterLevel &&
+    (inspection.inTank || (inspection.waterDepth !== null && inspection.waterDepth > 0))
+  );
+  const currentWaterDepth = isCurrentlySubmerged && inspection && inspection.elevation !== null
+    ? Math.max(0, Math.round((waterLevel - inspection.elevation) * 100) / 100)
+    : 0;
+
   return (
     <div
       style={{
         position: 'absolute',
-        top: 76,
+        top: 140,
         left: 20,
         width: 400,
         zIndex: 40,
@@ -186,7 +196,7 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
                 {/* Hydrological Status Tag */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#cbd5e1' }}>Status:</span>
-                  {inspection.waterDepth !== null && inspection.waterDepth > 0 ? (
+                  {isCurrentlySubmerged && currentWaterDepth > 0 ? (
                     <span
                       style={{
                         fontSize: 11,
@@ -215,7 +225,7 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
                         letterSpacing: '0.04em'
                       }}
                     >
-                      DRY SHORELINE / EMBANKMENT
+                      {inspection.inTank ? 'EXPOSED BED / SHORELINE' : 'DRY SURROUNDING TERRAIN'}
                     </span>
                   )}
                 </div>
@@ -235,7 +245,7 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                     <span style={{ fontSize: 13, fontWeight: 500, color: '#e2e8f0' }}>
-                      {inspection.waterDepth && inspection.waterDepth > 0 ? 'Reservoir Bed Elevation:' : 'Ground Surface Elevation:'}
+                      {currentWaterDepth > 0 ? 'Reservoir Bed Elevation:' : 'Ground Surface Elevation:'}
                     </span>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
                       <strong style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: inspection.elevation !== null ? '#38bdf8' : '#f43f5e' }}>
@@ -249,7 +259,7 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
                     <span style={{ fontSize: 13, fontWeight: 500, color: '#e2e8f0' }}>Operating Water Level:</span>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
                       <strong style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: '#93c5fd' }}>
-                        {inspection.waterLevel.toFixed(2)}
+                        {waterLevel.toFixed(2)}
                       </strong>
                       <span style={{ fontSize: 12, fontWeight: 600, color: '#93c5fd' }}>m MSL</span>
                     </div>
@@ -258,11 +268,11 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                     <span style={{ fontSize: 13, fontWeight: 600, color: '#f8fafc' }}>Water Column Depth:</span>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-                      <strong style={{ fontFamily: 'var(--font-mono)', fontSize: 24, fontWeight: 800, color: inspection.waterDepth && inspection.waterDepth > 0 ? '#38bdf8' : '#94a3b8' }}>
-                        {inspection.waterDepth && inspection.waterDepth > 0 ? inspection.waterDepth.toFixed(2) : '0.00'}
+                      <strong style={{ fontFamily: 'var(--font-mono)', fontSize: 24, fontWeight: 800, color: currentWaterDepth > 0 ? '#38bdf8' : '#94a3b8' }}>
+                        {currentWaterDepth > 0 ? currentWaterDepth.toFixed(2) : '0.00'}
                       </strong>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: inspection.waterDepth && inspection.waterDepth > 0 ? '#38bdf8' : '#94a3b8' }}>
-                        {inspection.waterDepth && inspection.waterDepth > 0 ? 'm' : 'm (Dry)'}
+                      <span style={{ fontSize: 13, fontWeight: 700, color: currentWaterDepth > 0 ? '#38bdf8' : '#94a3b8' }}>
+                        {currentWaterDepth > 0 ? 'm' : 'm (Dry / Exposed)'}
                       </span>
                     </div>
                   </div>

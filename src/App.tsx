@@ -17,6 +17,7 @@ import { SedimentVolumeModal } from './components/Dashboard/SedimentVolumeCard';
 import { SurveyImportModal } from './components/Dashboard/SurveyImportModal';
 import { ExportReportModal } from './components/Dashboard/ExportReportModal';
 import { DamElevationProfileModal } from './components/Dashboard/DamElevationProfileModal';
+import chapoliLogo from './assets/chapoli-logo.png';
 
 export const App: React.FC = () => {
   const data = (rawData as unknown) as ChapoliData;
@@ -201,10 +202,26 @@ export const App: React.FC = () => {
             waterDepthData={waterDepthData}
             permanentWaterVisible={permanentWaterVisible}
             permanentWaterOpacity={siltVisible ? 0.3 : 0.88} // mostly clear over silt so its colours read from above
-            permanentWaterLevel={observedWaterLevel} // observed SCADA level, same week as the satellite pass
+            permanentWaterLevel={waterLevel} // live simulated water level, rises and falls with the slider
             permanentWaterDepthScale={permanentWaterDepthScale}
             viewPresetTrigger={viewPresetTrigger}
             navigationRightOffset={activeRightTab ? 450 : 70}
+          />
+
+          <img
+            src={chapoliLogo}
+            alt="Chapoli 3D Sediment Measurement Digital Twin"
+            style={{
+              position: 'absolute',
+              top: 8,
+              left: 18,
+              width: 128,
+              height: 64,
+              objectFit: 'contain',
+              zIndex: 48,
+              pointerEvents: 'none',
+              filter: 'drop-shadow(0 2px 8px rgba(0, 0, 0, 0.65))'
+            }}
           />
 
           {/* Bottom dock: water on/off toggle above the silt timeline HUD */}
@@ -232,7 +249,7 @@ export const App: React.FC = () => {
                 onToggleSilt={setSiltVisible}
                 sectionOn={sectionCutX !== null}
                 onToggleSection={handleToggleSection}
-                surfaceLevel={observedWaterLevel}
+                surfaceLevel={waterLevel}
                 depthScale={permanentWaterDepthScale}
                 onDepthScale={setPermanentWaterDepthScale}
                 docked
@@ -300,7 +317,7 @@ export const App: React.FC = () => {
             style={{
               position: 'absolute',
               top: 20,
-              right: (activeRightTab ? 450 : 70) + 60,
+              right: (activeRightTab ? 450 : 70) + 54,
               transition: 'right 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
               zIndex: 45,
               pointerEvents: 'auto'

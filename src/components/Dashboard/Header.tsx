@@ -1,6 +1,7 @@
 import React from 'react';
-import { Waves, Mountain, Layers, FileDown, Upload, Activity, ShieldCheck, AlertTriangle, Compass, Radio } from 'lucide-react';
+import { Mountain, Layers, FileDown, Upload, Activity, ShieldCheck, AlertTriangle, Compass, Radio } from 'lucide-react';
 import { DEMSummary, LiveTelemetry } from '../../types/reservoir';
+import chapoliLogo from '../../assets/chapoli-logo.png';
 
 interface HeaderProps {
   sampleMode: boolean;
@@ -50,20 +51,11 @@ export const Header: React.FC<HeaderProps> = ({
     >
       {/* Title & Metadata */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <div
-          style={{
-            width: 38,
-            height: 38,
-            borderRadius: 10,
-            background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 0 15px rgba(56, 189, 248, 0.3)'
-          }}
-        >
-          <Waves size={22} color="#ffffff" />
-        </div>
+        <img
+          src={chapoliLogo}
+          alt="Chapoli 3D Sediment Measurement Digital Twin"
+          style={{ width: 108, height: 54, objectFit: 'contain', flexShrink: 0 }}
+        />
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <h1 style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em', color: '#f8fafc' }}>

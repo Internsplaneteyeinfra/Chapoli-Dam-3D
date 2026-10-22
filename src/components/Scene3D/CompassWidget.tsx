@@ -14,13 +14,11 @@ export const CompassWidget: React.FC<CompassWidgetProps> = ({ rotationY, onReset
       onClick={onResetNorth}
       title="Click to Align View to True North"
       style={{
-        position: 'absolute',
-        top: 20,
-        right: 20,
-        width: 48,
-        height: 48,
+        position: 'relative',
+        width: 38,
+        height: 38,
         borderRadius: '50%',
-        background: 'rgba(10, 18, 36, 0.85)',
+        background: 'rgba(8, 14, 28, 0.90)',
         border: '1px solid rgba(56, 189, 248, 0.3)',
         boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
         display: 'flex',
@@ -30,7 +28,7 @@ export const CompassWidget: React.FC<CompassWidgetProps> = ({ rotationY, onReset
         cursor: 'pointer',
         zIndex: 50,
         userSelect: 'none',
-        backdropFilter: 'blur(8px)',
+        backdropFilter: 'blur(10px)',
         transition: 'transform 0.15s ease, border-color 0.15s ease'
       }}
       className="hover:scale-105"

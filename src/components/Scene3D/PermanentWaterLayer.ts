@@ -4,6 +4,7 @@ import { WaterDepthPayload } from '../../types/waterDepth';
 export interface PermanentWaterLayerOptions {
   visible: boolean;
   waterLevel: number;
+  baselineLevel?: number;
   verticalExaggeration: number;
   opacity: number;
   /** Extra exaggeration applied only to the water body's depth (bottom goes depth x scale below the surface) */
@@ -195,7 +196,8 @@ export class PermanentWaterLayer {
     const cx = (c: number) => b.minX + (c / W) * b.width;
     const cz = (r: number) => b.minZ + (r / H) * b.depth;
     const depthAt = (r: number, c: number) => corners[r * (W + 1) + c];
-    const bottomY = (r: number, c: number) => (this.options.waterLevel - depthAt(r, c) * this.options.depthScale) * ex;
+    const baseline = this.options.baselineLevel ?? 38.25;
+    const bottomY = (r: number, c: number) => Math.min(topY, (baseline - depthAt(r, c) * this.options.depthScale) * ex);
     const colorFor = (d: number) => BODY_TOP.clone().lerp(BODY_DEEP, Math.min(1, d / maxDepth));
 
     const pushVert = (x: number, y: number, z: number, col: THREE.Color) => {
@@ -207,8 +209,10 @@ export class PermanentWaterLayer {
 
     // Wall quad between grid corners (r0,c0)-(r1,c1), from surface down to the bottom
     const pushWall = (r0: number, c0: number, r1: number, c1: number) => {
-      const x0 = cx(c0), z0 = cz(r0), x1 = cx(c1), z1 = cz(r1);
       const b0 = bottomY(r0, c0), b1 = bottomY(r1, c1);
+      // Skip if water level is at or below bed elevation
+      if (topY <= b0 && topY <= b1) return;
+      const x0 = cx(c0), z0 = cz(r0), x1 = cx(c1), z1 = cz(r1);
       const deep0 = colorFor(depthAt(r0, c0)), deep1 = colorFor(depthAt(r1, c1));
       pushVert(x0, topY, z0, BODY_TOP);
       pushVert(x1, topY, z1, BODY_TOP);
@@ -231,16 +235,18 @@ export class PermanentWaterLayer {
       }
     }
 
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3));
-    geo.computeVertexNormals();
+    if (positions.length > 0) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+      geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3));
+      geo.computeVertexNormals();
 
-    this.body = new THREE.Mesh(geo, this.bodyMaterial);
-    this.body.renderOrder = 4;
-    this.body.name = 'PermanentWaterBody';
-    this.body.visible = this.bodyVisible;
-    this.group.add(this.body);
+      this.body = new THREE.Mesh(geo, this.bodyMaterial);
+      this.body.renderOrder = 4;
+      this.body.name = 'PermanentWaterBody';
+      this.body.visible = this.bodyVisible;
+      this.group.add(this.body);
+    }
   }
 
   public setWaterLevel(level: number) {

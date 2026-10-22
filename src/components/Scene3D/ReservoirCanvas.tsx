@@ -285,10 +285,13 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
       siltRef.current = silt;
     }
 
+    const baselineWaterLevel = data.live_telemetry?.reportedLevel_m ?? data.baseline_specs?.frl_m ?? 38.25;
+
     if (waterDepthData) {
       const permanentWater = new PermanentWaterLayer(waterDepthData, {
         visible: permanentWaterVisible,
         waterLevel: permanentWaterLevel,
+        baselineLevel: baselineWaterLevel,
         depthScale: permanentWaterDepthScale,
         verticalExaggeration,
         opacity: permanentWaterOpacity
@@ -457,16 +460,17 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
   }, [permanentWaterDepthScale]);
 
   // Lower the reservoir bed to the satellite water bottom (with or without the water shown),
-  // and drape the silt on that lowered bed
+  // and drape the silt on that lowered bed - fixed to baseline survey datum so terrain bed does not warp during water level simulation
   useEffect(() => {
+    const baseline = data.live_telemetry?.reportedLevel_m ?? data.baseline_specs?.frl_m ?? 38.25;
     const carve = waterDepthData
       ? (x: number, z: number, baseElev: number) =>
-          carveBedToWaterBottom(waterDepthData, x, z, baseElev, permanentWaterLevel, permanentWaterDepthScale)
+          carveBedToWaterBottom(waterDepthData, x, z, baseElev, baseline, permanentWaterDepthScale)
       : null;
     terrainRef.current?.setBedCarve(carve);
-    siltRef.current?.setCapLevel(waterDepthData ? permanentWaterLevel : undefined);
+    siltRef.current?.setCapLevel(waterDepthData ? baseline : undefined);
     siltRef.current?.setBedElevationFn(carve);
-  }, [waterDepthData, permanentWaterLevel, permanentWaterDepthScale]);
+  }, [waterDepthData, data, permanentWaterDepthScale]);
 
   // Water side walls clutter the solid silt deposit; show them only while silt is off
   useEffect(() => {
@@ -969,6 +973,7 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
           style={{
             display: 'flex',
             flexDirection: 'column',
+            width: 38,
             background: 'rgba(8, 14, 28, 0.90)',
             borderRadius: 8,
             border: '1px solid rgba(56, 189, 248, 0.25)',
@@ -981,7 +986,7 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
             onClick={(e) => { e.stopPropagation(); zoomIn(); }}
             title="Zoom In"
             style={{
-              width: 36,
+              width: 38,
               height: 32,
               background: 'transparent',
               border: 'none',
@@ -1001,7 +1006,7 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
             onClick={(e) => { e.stopPropagation(); zoomOut(); }}
             title="Zoom Out"
             style={{
-              width: 36,
+              width: 38,
               height: 32,
               background: 'transparent',
               border: 'none',
@@ -1021,7 +1026,7 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
             onClick={(e) => { e.stopPropagation(); zoomFit(); }}
             title="Fit Entire Reservoir to View"
             style={{
-              width: 36,
+              width: 38,
               height: 32,
               background: 'transparent',
               border: 'none',
@@ -1099,7 +1104,7 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
       <div
         style={{
           position: 'absolute',
-          top: 20,
+          top: 82,
           left: 20,
           display: 'flex',
           gap: 4,
