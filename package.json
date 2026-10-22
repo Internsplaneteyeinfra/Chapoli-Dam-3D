@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npx tsc && npx vite build",
+    "build": "node_modules/.bin/tsc && node_modules/.bin/vite build",
     "preview": "vite preview",
-    "start": "npx vite preview --host 0.0.0.0 --port ${PORT:-10000}"
+    "start": "node_modules/.bin/vite preview --host 0.0.0.0 --port ${PORT:-10000}"
   },
   "dependencies": {
     "geotiff": "^2.1.3",
