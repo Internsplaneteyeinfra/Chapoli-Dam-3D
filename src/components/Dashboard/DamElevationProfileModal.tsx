@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, ShieldCheck, Info, Compass, Ruler, AlertCircle } from 'lucide-react';
+import { X, ListChecks, Compass, Ruler } from 'lucide-react';
 import { DamGeometry } from '../../types/reservoir';
 
 interface DamElevationProfileModalProps {
@@ -114,10 +114,10 @@ export const DamElevationProfileModal: React.FC<DamElevationProfileModalProps> =
             <Compass size={20} color="var(--accent-cyan)" />
             <div>
               <h3 style={{ fontSize: 16, fontWeight: 700, color: '#f8fafc', letterSpacing: '-0.01em' }}>
-                Chapoli Dam Elevation Profile & Embankment Cross-Section
+                Dam cross-section
               </h3>
               <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
-                Official Goa Water Resources Department Design Geometry & Caliper Reference
+                Official Goa WRD dimensions
               </p>
             </div>
           </div>
@@ -151,7 +151,7 @@ export const DamElevationProfileModal: React.FC<DamElevationProfileModalProps> =
             </defs>
 
             {/* Horizontal Grid Datum Lines */}
-            {[15.5, 22.0, 30.0, 38.25, 38.75, 41.0].map((elev) => {
+            {[15.5, 22.0, 30.0, 38.25, 41.0].map((elev) => {
               const y = elevToY(elev);
               return (
                 <g key={elev}>
@@ -204,7 +204,7 @@ export const DamElevationProfileModal: React.FC<DamElevationProfileModalProps> =
               fontFamily="var(--font-mono)"
               textAnchor="end"
             >
-              Bed Foundation Datum: El. 15.50 m MSL
+              Deepest bed 15.50 m
             </text>
 
             {/* Earthen Dam Embankment Cross-Section */}
@@ -253,7 +253,7 @@ export const DamElevationProfileModal: React.FC<DamElevationProfileModalProps> =
               fontWeight="700"
               textAnchor="middle"
             >
-              Crest El. 41.00m (Width: 6m)
+              Dam top 41.00 m
             </text>
 
             {/* Upstream Slope Label: 1:2.5 */}
@@ -264,7 +264,7 @@ export const DamElevationProfileModal: React.FC<DamElevationProfileModalProps> =
               fontSize="11"
               fontWeight="600"
             >
-              Upstream Rip-rap (1:2.5) →
+              Reservoir side →
             </text>
 
             {/* Downstream Slope Label: 1:2.0 */}
@@ -275,7 +275,7 @@ export const DamElevationProfileModal: React.FC<DamElevationProfileModalProps> =
               fontSize="11"
               fontWeight="600"
             >
-              ← Downstream Turf (1:2.0)
+              ← Downstream side
             </text>
 
             {/* Active Simulation Waterline */}
@@ -295,14 +295,14 @@ export const DamElevationProfileModal: React.FC<DamElevationProfileModalProps> =
             />
             <text
               x={svgWidth - padRight - 10}
-              y={waterY - 8}
-              fill="#38bdf8"
+              y={waterY + 20}
+              fill="#e0f2fe"
               fontSize="11"
               fontWeight="700"
               fontFamily="var(--font-mono)"
               textAnchor="end"
             >
-              Simulated Water Level: {waterLevel.toFixed(2)} m MSL
+              Water {waterLevel.toFixed(2)} m
             </text>
 
             {/* FRL (38.25m) Spillway Crest Indicator */}
@@ -317,34 +317,13 @@ export const DamElevationProfileModal: React.FC<DamElevationProfileModalProps> =
             />
             <text
               x={svgWidth - padRight - 10}
-              y={frlY + 12}
+              y={frlY - 6}
               fill="#38bdf8"
               fontSize="10"
               fontFamily="var(--font-mono)"
               textAnchor="end"
             >
-              FRL & Spillway Crest: 38.25 m
-            </text>
-
-            {/* MWL (38.75m) Head Indicator */}
-            <line
-              x1={crestCenterX + crestHalfW}
-              y1={mwlY}
-              x2={svgWidth - padRight}
-              y2={mwlY}
-              stroke="#f59e0b"
-              strokeWidth="1.5"
-              strokeDasharray="4,4"
-            />
-            <text
-              x={svgWidth - padRight - 10}
-              y={mwlY - 4}
-              fill="#f59e0b"
-              fontSize="10"
-              fontFamily="var(--font-mono)"
-              textAnchor="end"
-            >
-              MWL: 38.75 m (+0.5m Design Head)
+              Full level 38.25 m
             </text>
 
             {/* MDDL (22.00m) Dead Storage Line */}
@@ -365,28 +344,7 @@ export const DamElevationProfileModal: React.FC<DamElevationProfileModalProps> =
               fontFamily="var(--font-mono)"
               textAnchor="end"
             >
-              MDDL: 22.00 m (Dead Storage 49 Hamts)
-            </text>
-
-            {/* Freeboard Dimension (Crest 41.00m to MWL 38.75m = 2.25m) */}
-            <line
-              x1={crestCenterX - 25}
-              y1={crestY}
-              x2={crestCenterX - 25}
-              y2={mwlY}
-              stroke="#ef4444"
-              strokeWidth="2"
-            />
-            <text
-              x={crestCenterX - 32}
-              y={(crestY + mwlY) / 2 + 4}
-              fill="#f87171"
-              fontSize="9"
-              fontFamily="var(--font-mono)"
-              textAnchor="end"
-              fontWeight="600"
-            >
-              Freeboard 2.25m
+              Minimum level 22.00 m
             </text>
 
             {/* Structural Caliper: Top of Dam (41.0m) to Deepest Bed (15.5m) = 25.50m */}
@@ -405,7 +363,7 @@ export const DamElevationProfileModal: React.FC<DamElevationProfileModalProps> =
               <rect
                 x="8"
                 y={(crestY + bedY) / 2 - 12}
-                width="145"
+                width="140"
                 height="24"
                 rx="4"
                 fill="rgba(15, 23, 42, 0.9)"
@@ -420,7 +378,7 @@ export const DamElevationProfileModal: React.FC<DamElevationProfileModalProps> =
                 fontWeight="700"
                 fontFamily="var(--font-mono)"
               >
-                Dam Height: 25.50 m
+                Dam height 25.50 m
               </text>
             </g>
           </svg>
@@ -433,77 +391,79 @@ export const DamElevationProfileModal: React.FC<DamElevationProfileModalProps> =
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Ruler size={16} color="var(--accent-cyan)" />
               <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: '#f8fafc' }}>
-                Vertical Caliper Measurement
+                Measure height
               </h4>
             </div>
 
             <div style={{ display: 'flex', gap: 8, fontSize: 11 }}>
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ color: 'var(--text-muted)' }}>Upper Datum:</span>
+                <span style={{ color: 'var(--text-muted)' }}>From</span>
                 <select
                   value={selectedTopElev}
                   onChange={(e) => setSelectedTopElev(parseFloat(e.target.value))}
                   style={{ background: 'rgba(15, 23, 42, 0.9)', color: '#ffffff', border: '1px solid var(--border-dim)', borderRadius: 6, padding: '4px 6px', fontSize: 11 }}
                 >
-                  <option value={41.00}>Dam Crest (41.00 m MSL)</option>
-                  <option value={38.75}>MWL (38.75 m MSL)</option>
-                  <option value={38.25}>FRL / Spillway (38.25 m MSL)</option>
-                  <option value={waterLevel}>Current Water Level ({waterLevel.toFixed(2)} m MSL)</option>
+                  <option value={41.00}>Dam top (41.00 m)</option>
+                  <option value={38.75}>Max flood (38.75 m)</option>
+                  <option value={38.25}>Full level (38.25 m)</option>
+                  <option value={waterLevel}>Water now ({waterLevel.toFixed(2)} m)</option>
                 </select>
               </div>
 
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ color: 'var(--text-muted)' }}>Lower Datum:</span>
+                <span style={{ color: 'var(--text-muted)' }}>To</span>
                 <select
                   value={selectedBottomElev}
                   onChange={(e) => setSelectedBottomElev(parseFloat(e.target.value))}
                   style={{ background: 'rgba(15, 23, 42, 0.9)', color: '#ffffff', border: '1px solid var(--border-dim)', borderRadius: 6, padding: '4px 6px', fontSize: 11 }}
                 >
-                  <option value={15.50}>Deepest Bed Level (15.50 m MSL)</option>
-                  <option value={22.00}>MDDL Floor (22.00 m MSL)</option>
-                  <option value={38.25}>FRL (38.25 m MSL)</option>
+                  <option value={15.50}>Deepest bed (15.50 m)</option>
+                  <option value={22.00}>Minimum level (22.00 m)</option>
+                  <option value={38.25}>Full level (38.25 m)</option>
                 </select>
               </div>
             </div>
 
             <div style={{ background: 'rgba(15, 23, 42, 0.8)', padding: '10px 14px', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Vertical Difference:</span>
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Difference</span>
               <strong style={{ fontSize: 18, fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>
                 {measuredDiff.toFixed(2)} m
               </strong>
             </div>
 
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.3 }}>
-              {selectedTopElev === 41.00 && selectedBottomElev === 15.50 ? (
-                <span style={{ color: '#34d399' }}>✓ Exactly matches official Goa WRD structural dam height of 25.50m.</span>
-              ) : (
-                <span>Measured difference between selected engineering reference datums.</span>
-              )}
-            </div>
+            {selectedTopElev === 41.00 && selectedBottomElev === 15.50 && (
+              <div style={{ fontSize: 10, color: '#34d399' }}>= official dam height</div>
+            )}
           </div>
 
           {/* Validation & Provenance Disclosure */}
           <div className="glass-panel-subtle" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 11 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <ShieldCheck size={16} color="#10b981" />
-              <strong style={{ color: '#34d399' }}>Engineering Datum & Geometry Audit</strong>
+              <ListChecks size={16} color="var(--accent-cyan)" />
+              <strong style={{ fontSize: 12, textTransform: 'uppercase', color: '#f8fafc' }}>Key numbers</strong>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-              <div>• <strong>Dam Axis Alignment:</strong> 760m straight western reservoir boundary verified from KML and Satellite DTM.</div>
-              <div>• <strong>Top of Dam:</strong> 41.00 m MSL (documented official WRD elevation).</div>
-              <div>• <strong>Structural Height:</strong> 25.50 m above deepest bed level.</div>
-              <div>• <strong>Implied Deepest Bed:</strong> 41.00 m - 25.50 m = <strong>15.50 m MSL</strong>. Used as verified vertical consistency check.</div>
-              <div>• <strong>Spillway Crest:</strong> 38.25 m MSL (ungated chute spillway, maximum head 0.50m).</div>
-              <div>• <strong>Vertical Datum:</strong> Survey of India Mean Sea Level (MSL), UTM Zone 43N (EPSG:32643).</div>
-            </div>
+            {[
+              ['Dam top', `${topOfDam.toFixed(2)} m`],
+              ['Full level', `${frl.toFixed(2)} m`],
+              ['Minimum level', `${mddl.toFixed(2)} m`],
+              ['Deepest bed', `${deepestBed.toFixed(2)} m`],
+              ['Dam height', `${structuralHeight.toFixed(2)} m`],
+              ['Dam length', `${crestLength.toFixed(0)} m`]
+            ].map(([label, value]) => (
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
+                <strong style={{ fontFamily: 'var(--font-mono)', color: '#f8fafc' }}>{value}</strong>
+              </div>
+            ))}
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Heights in metres above sea level.</div>
           </div>
         </div>
 
         {/* Footer */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border-dim)', paddingTop: 12 }}>
           <button className="btn-primary" onClick={onClose} style={{ padding: '8px 18px', fontSize: 12 }}>
-            Close Profile Analysis
+            Close
           </button>
         </div>
       </div>

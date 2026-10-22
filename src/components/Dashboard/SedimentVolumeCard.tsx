@@ -1,25 +1,41 @@
 import React from 'react';
-import { X, Mountain, AlertTriangle, ShieldCheck, CheckCircle2, TrendingDown } from 'lucide-react';
-import { SedimentVolumeStats, BaselineSpecs } from '../../types/reservoir';
+import { X, Mountain } from 'lucide-react';
+import { SiltSeriesPayload } from '../../types/silt';
 
 interface SedimentVolumeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  stats: SedimentVolumeStats;
-  specs: BaselineSpecs;
-  sampleMode: boolean;
-  onEnableSampleMode: () => void;
+  siltData: SiltSeriesPayload;
+  siltMonth: string;
+  onSelectMonth: (monthKey: string) => void;
 }
 
+/**
+ * Silt report from the Sentinel-2 monthly series (the only sediment data available:
+ * there is no pre-impoundment survey, so no absolute deposit volume is shown).
+ */
 export const SedimentVolumeModal: React.FC<SedimentVolumeModalProps> = ({
   isOpen,
   onClose,
-  stats,
-  specs,
-  sampleMode,
-  onEnableSampleMode
+  siltData,
+  siltMonth,
+  onSelectMonth
 }) => {
   if (!isOpen) return null;
+
+  const record = siltData.months[siltMonth] || siltData.months[siltData.activeDefaultMonth];
+  const bd = record.classificationBreakdown;
+  const classes = [bd.low, bd.moderate, bd.high, bd.veryHigh];
+  const timeline = siltData.timeline;
+  const maxVol = Math.max(...timeline.map(m => m.volumeM3), 1);
+  const isPeak = timeline.some(m => m.key === record.key && m.isPeak);
+
+  const card = (label: string, value: string, color = '#f8fafc') => (
+    <div style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid var(--border-dim)', borderRadius: 8, padding: '10px 12px' }}>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{label}</div>
+      <div style={{ fontSize: 20, fontWeight: 700, fontFamily: 'var(--font-mono)', color, marginTop: 2 }}>{value}</div>
+    </div>
+  );
 
   return (
     <div
@@ -34,119 +50,104 @@ export const SedimentVolumeModal: React.FC<SedimentVolumeModalProps> = ({
         justifyContent: 'center',
         padding: 20
       }}
+      onClick={onClose}
     >
       <div
         className="glass-panel"
         style={{
-          width: '90%',
-          maxWidth: 680,
-          background: 'rgba(10, 18, 36, 0.95)',
-          padding: 24,
-          borderRadius: 14,
+          width: 640,
+          maxWidth: '95vw',
+          maxHeight: '92vh',
+          overflowY: 'auto',
+          background: 'rgba(8, 14, 28, 0.98)',
+          border: '1px solid rgba(245, 158, 11, 0.3)',
+          borderRadius: 12,
+          padding: 22,
           display: 'flex',
           flexDirection: 'column',
-          gap: 16
+          gap: 14
         }}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-dim)', paddingBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-dim)', paddingBottom: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Mountain size={20} color="var(--accent-amber)" />
+            <Mountain size={20} color="#f59e0b" />
             <div>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: '#f8fafc' }}>
-                Reservoir Sediment Volume & Capacity Loss Analysis
-              </h3>
-              <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                Rigorous spatial cell integration over validated Chapoli M.I. Tank terrain
-              </div>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: '#f8fafc' }}>Silt report</h3>
+              <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>Sentinel-2 satellite, {siltData.year}</p>
             </div>
           </div>
-          <button onClick={onClose} className="btn-icon" style={{ width: 32, height: 32 }}>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}>
             <X size={18} />
           </button>
         </div>
 
-        {/* Mode Status Warning / Banner */}
-        {!sampleMode ? (
-          <div style={{ padding: 14, borderRadius: 8, background: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.3)', display: 'flex', gap: 12 }}>
-            <AlertTriangle size={20} color="#fb7185" style={{ flexShrink: 0, marginTop: 2 }} />
-            <div style={{ fontSize: 12, lineHeight: 1.4 }}>
-              <strong style={{ color: '#fb7185' }}>Data Integrity Notice: Pre-Impoundment Survey Unavailable</strong>
-              <div style={{ color: 'var(--text-secondary)', marginTop: 4 }}>
-                The provided files contain the current DEM raster and 1m bathymetric contours, but do not contain a historical pre-impoundment bathymetry survey.
-                In accordance with scientific engineering guidelines, measured sediment volume is reported as <strong>UNAVAILABLE</strong> rather than presenting fabricated estimates.
+        {/* Selected month */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <strong style={{ fontSize: 13, color: '#fbbf24' }}>{record.dateLabel}</strong>
+          {isPeak && (
+            <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#ef4444', color: '#ffffff' }}>
+              HIGHEST SILT
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+          {card('Silt amount', `${Math.round(record.totalSiltVolumeM3).toLocaleString()} m³`, '#fbbf24')}
+          {card('Silt score (0–1)', record.meanSiltScore.toFixed(2))}
+          {card('Water area', `${record.waterAreaHa.toFixed(1)} ha`, '#38bdf8')}
+        </div>
+
+        {/* Class breakdown */}
+        <div style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid var(--border-dim)', borderRadius: 8, padding: '10px 12px' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>Share of water area by silt class</div>
+          <div style={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', background: '#1e293b' }}>
+            {classes.map(c => <div key={c.label} style={{ width: `${c.percent}%`, background: c.color }} title={`${c.label}: ${c.percent}%`} />)}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginTop: 8, fontSize: 11 }}>
+            {classes.map(c => (
+              <div key={c.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 9, height: 9, borderRadius: 2, background: c.color }} />
+                <span style={{ color: 'var(--text-secondary)' }}>{c.label.replace(' Silt', '')}</span>
+                <strong style={{ fontFamily: 'var(--font-mono)', color: '#e2e8f0', marginLeft: 'auto' }}>{c.percent}%</strong>
               </div>
-              <button
-                onClick={onEnableSampleMode}
-                className="btn-amber"
-                style={{ marginTop: 10, padding: '5px 12px', fontSize: 11 }}
-              >
-                Switch to Simulated Sample Model
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div style={{ padding: 12, borderRadius: 8, background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', display: 'flex', gap: 10 }}>
-            <AlertTriangle size={18} color="#f59e0b" style={{ flexShrink: 0, marginTop: 2 }} />
-            <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-              <strong style={{ color: '#fbbf24' }}>Simulated Sample Model Active:</strong> Pre-impoundment original bed is modeled based on natural thalweg sloping toward MDDL 22.0m outlet.
-              Use for conceptual sedimentation planning and workflow validation.
-            </div>
-          </div>
-        )}
-
-        {/* Key Metrics Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-          <div className="glass-panel-subtle" style={{ padding: 14 }}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Accumulated Sediment Volume</div>
-            <div style={{ fontSize: 22, fontWeight: 800, fontFamily: 'var(--font-mono)', color: sampleMode ? 'var(--accent-amber)' : 'var(--text-muted)', marginTop: 4 }}>
-              {sampleMode ? `${stats.volumeMCM.toFixed(4)} MCM` : 'UNAVAILABLE'}
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
-              {sampleMode ? `${stats.volumeM3.toLocaleString()} m³` : 'Pending baseline survey'}
-            </div>
-          </div>
-
-          <div className="glass-panel-subtle" style={{ padding: 14 }}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Estimated Capacity Loss</div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 4 }}>
-              <div style={{ fontSize: 22, fontWeight: 800, fontFamily: 'var(--font-mono)', color: sampleMode ? '#f59e0b' : 'var(--text-muted)' }}>
-                {sampleMode ? `${stats.capacityLossPercent.toFixed(2)}%` : 'UNAVAILABLE'}
-              </div>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>of Gross Storage (9.9824 MCM)</span>
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
-              {sampleMode ? `${((stats.volumeMCM / specs.deadStorage_MCM) * 100).toFixed(1)}% of Dead Storage (${specs.deadStorage_MCM} MCM)` : 'Requires baseline comparison'}
-            </div>
-          </div>
-
-          <div className="glass-panel-subtle" style={{ padding: 14 }}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Mean Sediment Thickness</div>
-            <div style={{ fontSize: 20, fontWeight: 700, fontFamily: 'var(--font-mono)', color: '#ffffff', marginTop: 4 }}>
-              {sampleMode ? `${stats.meanThicknessM.toFixed(2)} m` : 'UNAVAILABLE'}
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
-              Maximum Local Thickness: <strong style={{ color: 'var(--accent-cyan)' }}>{sampleMode ? `${stats.maxThicknessM.toFixed(2)} m` : '-'}</strong>
-            </div>
-          </div>
-
-          <div className="glass-panel-subtle" style={{ padding: 14 }}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Surveyed Footprint & Coverage</div>
-            <div style={{ fontSize: 20, fontWeight: 700, fontFamily: 'var(--font-mono)', color: '#ffffff', marginTop: 4 }}>
-              {stats.surveyedAreaHa.toFixed(2)} ha
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
-              Spatial Coverage: <strong style={{ color: '#34d399' }}>{stats.coveragePercent.toFixed(1)}%</strong> (837 valid DEM cells)
-            </div>
+            ))}
           </div>
         </div>
 
-        {/* Exclusions & Accounting */}
-        <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: 12, borderRadius: 8, fontSize: 11, color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <div style={{ fontWeight: 600, color: '#e2e8f0' }}>Uncertainty & Spatial Exclusions:</div>
-          <div>• 458 NoData cells outside the reservoir boundary strictly excluded from volume computations.</div>
-          <div>• Baseline capacity figures preserved as supplied: Gross 9.9824 MCM ({specs.grossStorage_Hamts} Hamts).</div>
-          <div>• All volumes calculated using true metric cell area (dx = 30.55m, dy = 30.48m; ~931.2 m² per cell).</div>
+        {/* Monthly trend (click a month to select it) */}
+        <div style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid var(--border-dim)', borderRadius: 8, padding: '10px 12px' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>Silt amount by month</div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 120 }}>
+            {timeline.map(m => {
+              const selected = m.key === record.key;
+              return (
+                <button
+                  key={m.key}
+                  onClick={() => onSelectMonth(m.key)}
+                  title={`${m.fullName}: ${Math.round(m.volumeM3).toLocaleString()} m³`}
+                  style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                >
+                  <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: selected ? '#fbbf24' : 'var(--text-muted)' }}>
+                    {Math.round(m.volumeM3 / 1000)}k
+                  </span>
+                  <div
+                    style={{
+                      width: '100%',
+                      height: `${(m.volumeM3 / maxVol) * 80}%`,
+                      borderRadius: '4px 4px 0 0',
+                      background: selected ? '#f59e0b' : m.isPeak ? 'rgba(239, 68, 68, 0.6)' : 'rgba(245, 158, 11, 0.35)'
+                    }}
+                  />
+                  <span style={{ fontSize: 10, fontWeight: selected ? 700 : 500, color: selected ? '#ffffff' : 'var(--text-secondary)' }}>{m.month}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+          Relative estimate from satellite images, not a ground survey.
         </div>
       </div>
     </div>

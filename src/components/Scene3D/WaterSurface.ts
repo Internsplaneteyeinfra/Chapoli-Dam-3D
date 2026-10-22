@@ -1,5 +1,19 @@
 import * as THREE from 'three';
 import { ChapoliData } from '../../types/reservoir';
+import { createRippleNormalMap, FLOW_SPEED, RIPPLE_REPEAT } from './PermanentWaterLayer';
+
+// Same depth ramp as the satellite water: light blue (shallow) -> navy (deep)
+const DEPTH_RAMP = ['#bae6fd', '#38bdf8', '#0369a1', '#0c2d5a'].map(h => new THREE.Color(h));
+const DEPTH_RAMP_MAX_M = 20;
+// Ripple UVs span ~1.1 km so the pattern scale matches the satellite water layer
+const UV_SPAN = 1100;
+
+const depthColor = (depthM: number): THREE.Color => {
+  // Start a little into the ramp so shallow edges read as water, not near-white
+  const t = (0.22 + 0.78 * Math.max(0, Math.min(1, depthM / DEPTH_RAMP_MAX_M))) * (DEPTH_RAMP.length - 1);
+  const i = Math.min(DEPTH_RAMP.length - 2, Math.floor(t));
+  return DEPTH_RAMP[i].clone().lerp(DEPTH_RAMP[i + 1], t - i);
+};
 
 export interface WaterSurfaceOptions {
   waterLevel: number;
@@ -15,6 +29,7 @@ export class WaterSurface {
   private mesh: THREE.Mesh | null = null;
   private shorelineLine: THREE.LineSegments | null = null;
   private material: THREE.MeshStandardMaterial;
+  private rippleMap: THREE.DataTexture;
 
   constructor(data: ChapoliData, options: WaterSurfaceOptions) {
     this.data = data;
@@ -22,11 +37,15 @@ export class WaterSurface {
     this.group = new THREE.Group();
     this.group.name = 'WaterSurfaceGroup';
 
-    // Rich, realistic reservoir water material (no wireframe, solid deep blue-teal)
+    // Depth-shaded water with drifting ripples, matching the satellite water layer
+    this.rippleMap = createRippleNormalMap();
     this.material = new THREE.MeshStandardMaterial({
-      color: 0x0284c7, // Hydrological vibrant reservoir blue
-      roughness: 0.12,
-      metalness: 0.22,
+      color: 0xffffff,
+      vertexColors: true,
+      normalMap: this.rippleMap,
+      normalScale: new THREE.Vector2(0.35, 0.35),
+      roughness: 0.3,
+      metalness: 0.15,
       transparent: true,
       opacity: this.options.opacity ?? 0.90,
       depthWrite: true,
@@ -65,6 +84,8 @@ export class WaterSurface {
     }
 
     const vertices: number[] = [];
+    const colors: number[] = [];
+    const uvs: number[] = [];
     const indices: number[] = [];
     const vertMap = new Map<string, number>();
     let vCount = 0;
@@ -74,6 +95,9 @@ export class WaterSurface {
       if (vertMap.has(key)) return vertMap.get(key)!;
       const cell = this.data.cells[r * width + c];
       vertices.push(cell.localX, waterY, cell.localZ);
+      const col = depthColor(this.options.waterLevel - (cell.elevation ?? this.options.waterLevel));
+      colors.push(col.r, col.g, col.b);
+      uvs.push(cell.localX / UV_SPAN + 0.5, cell.localZ / UV_SPAN + 0.5);
       vertMap.set(key, vCount);
       return vCount++;
     };
@@ -129,6 +153,8 @@ export class WaterSurface {
 
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(colors), 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
     geo.setIndex(indices);
     geo.computeVertexNormals();
 
@@ -199,8 +225,8 @@ export class WaterSurface {
   public animate(clock: THREE.Clock) {
     if (!this.mesh) return;
     const time = clock.getElapsedTime();
-    // Subtle physical shimmer: slight roughness oscillation
-    this.material.roughness = 0.14 + Math.sin(time * 1.5) * 0.02;
+    // Ripples drift toward the dam, same motion as the satellite water layer
+    this.rippleMap.offset.set(time * FLOW_SPEED * RIPPLE_REPEAT * 0.1, Math.sin(time * 0.25) * 0.02);
   }
 
   public dispose() {
@@ -211,5 +237,6 @@ export class WaterSurface {
       this.shorelineLine.geometry.dispose();
     }
     this.material.dispose();
+    this.rippleMap.dispose();
   }
 }

@@ -10,6 +10,8 @@ interface SiltTimelineControlProps {
   onToggleVisualMode: (mode: SiltVisualMode) => void;
   siltVisible: boolean;
   onToggleSiltVisible: (visible: boolean) => void;
+  /** Rendered inside a parent bottom dock instead of positioning itself */
+  docked?: boolean;
 }
 
 export const SiltTimelineControl: React.FC<SiltTimelineControlProps> = ({
@@ -19,14 +21,19 @@ export const SiltTimelineControl: React.FC<SiltTimelineControlProps> = ({
   visualMode,
   onToggleVisualMode,
   siltVisible,
-  onToggleSiltVisible
+  onToggleSiltVisible,
+  docked = false
 }) => {
+  const placement: React.CSSProperties = docked
+    ? { position: 'relative', zIndex: 40 }
+    : { position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 40 };
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
   const timerRef = useRef<number | null>(null);
 
   const months = siltData.timeline;
-  const currentRecord: SiltMonthRecord = siltData.months[activeMonth] || siltData.months['sep'];
+  const currentRecord: SiltMonthRecord = siltData.months[activeMonth] || siltData.months[siltData.activeDefaultMonth];
+  const isPeakMonth = months.some(m => m.key === currentRecord.key && m.isPeak);
 
   // Autoplay through months
   useEffect(() => {
@@ -47,15 +54,7 @@ export const SiltTimelineControl: React.FC<SiltTimelineControlProps> = ({
 
   if (!siltVisible) {
     return (
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 24,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 40
-        }}
-      >
+      <div style={placement}>
         <button
           className="btn-amber"
           onClick={() => onToggleSiltVisible(true)}
@@ -71,7 +70,7 @@ export const SiltTimelineControl: React.FC<SiltTimelineControlProps> = ({
           }}
         >
           <Layers size={15} />
-          Show 2026 Silt Classification (10 Months)
+          Show 2026 Silt Classification ({months.length} Months)
         </button>
       </div>
     );
@@ -82,12 +81,9 @@ export const SiltTimelineControl: React.FC<SiltTimelineControlProps> = ({
   return (
     <div
       style={{
-        position: 'absolute',
-        bottom: 24,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        zIndex: 40,
-        width: isExpanded ? 'min(94%, 780px)' : 'auto',
+        ...placement,
+        width: isExpanded ? (docked ? '100%' : 'min(94%, 780px)') : 'auto',
+        boxSizing: 'border-box',
         background: 'rgba(8, 15, 30, 0.90)',
         backdropFilter: 'blur(16px)',
         border: '1px solid rgba(245, 158, 11, 0.35)',
@@ -122,14 +118,9 @@ export const SiltTimelineControl: React.FC<SiltTimelineControlProps> = ({
               <span style={{ fontSize: 13, fontWeight: 700, color: '#f8fafc' }}>
                 Sentinel-2 Silt Monitoring: {currentRecord.dateLabel}
               </span>
-              {currentRecord.key === 'sep' && (
+              {isPeakMonth && (
                 <span className="badge badge-simulated" style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid #ef4444', color: '#f87171', fontSize: 10 }}>
                   Peak Deposition
-                </span>
-              )}
-              {currentRecord.key === 'jul' && (
-                <span className="badge" style={{ background: 'rgba(100, 116, 139, 0.2)', border: '1px solid #64748b', color: '#94a3b8', fontSize: 10 }}>
-                  Monsoon Cloud Mask
                 </span>
               )}
             </div>
@@ -212,7 +203,7 @@ export const SiltTimelineControl: React.FC<SiltTimelineControlProps> = ({
           {isPlaying ? <Pause size={14} /> : <Play size={14} />}
         </button>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 4, flex: 1 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${months.length}, 1fr)`, gap: 4, flex: 1 }}>
           {months.map(m => {
             const isSelected = m.key === activeMonth;
             return (

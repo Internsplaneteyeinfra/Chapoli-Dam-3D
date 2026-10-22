@@ -45,6 +45,8 @@ export class TerrainMesh {
   private f30Positions: Float32Array | null = null;
   private f30TerrainColors: Float32Array | null = null;
   private currentMode: DtmSurfaceMode;
+  private bedCarve: ((x: number, z: number, baseElev: number) => number) | null = null;
+  private bedWetness: ((x: number, z: number) => number) | null = null;
 
   constructor(data: ChapoliData, options: TerrainMeshOptions) {
     this.data = data;
@@ -264,14 +266,8 @@ export class TerrainMesh {
     posAttrTerrain.needsUpdate = true;
     this.terrainGeometry.computeVertexNormals();
 
-    // Update Reservoir Bed vertex positions
-    const posAttrBed = this.bedGeometry.attributes.position;
-    for (let i = 0; i < count; i++) {
-      const baseY = this.basePositions[i * 3 + 1];
-      posAttrBed.setY(i, baseY * exaggeration);
-    }
-    posAttrBed.needsUpdate = true;
-    this.bedGeometry.computeVertexNormals();
+    // Update Reservoir Bed vertex positions (including any basin carve)
+    this.applyBedHeights();
 
     // Update shoreline line height
     const shoreline = this.group.getObjectByName('AuthoritativeShoreline') as THREE.LineLoop;
@@ -293,6 +289,104 @@ export class TerrainMesh {
   public setBedVisible(visible: boolean) {
     this.options.bedVisible = visible;
     this.bedMesh.visible = visible;
+  }
+
+  /**
+   * Lower the reservoir bed (bed mesh only) with `carve(x, z, baseElev) -> elev`, e.g. down
+   * to the satellite water bottom. Applies whether or not the water layer is shown.
+   * Pass null to restore the surveyed/reconstructed bed.
+   */
+  public setBedCarve(carve: ((x: number, z: number, baseElev: number) => number) | null) {
+    this.bedCarve = carve;
+    this.applyBedHeights();
+    this.applyBedColors();
+  }
+
+  /**
+   * Tint the bed as water while the water layer is on: deep blue where `wetness(x, z)` (0..1)
+   * says there is permanent water, a light shallow-water shade over the rest of the lakebed.
+   * Pass null for the plain geological lakebed colours.
+   */
+  public setBedWaterTint(wetness: ((x: number, z: number) => number) | null) {
+    this.bedWetness = wetness;
+    this.applyBedColors();
+    // Slightly glossier while tinted so the water shade reads as wet
+    this.bedMaterial.roughness = wetness ? 0.55 : 0.88;
+    this.bedMaterial.needsUpdate = true;
+  }
+
+  /**
+   * Rendered surface elevation (m MSL) at a local point: bilinear over the DTM grid,
+   * using the carved bed inside the reservoir. Null outside the grid.
+   */
+  public sampleSurfaceElevation(x: number, z: number): number | null {
+    const w = this.data.dem.width;
+    const h = this.data.dem.height;
+    const x0 = this.basePositions[0];
+    const z0 = this.basePositions[2];
+    const dx = this.basePositions[3] - x0;
+    const dz = this.basePositions[w * 3 + 2] - z0;
+    const cf = (x - x0) / dx;
+    const rf = (z - z0) / dz;
+    const c0 = Math.floor(cf);
+    const r0 = Math.floor(rf);
+    if (c0 < 0 || r0 < 0 || c0 >= w - 1 || r0 >= h - 1) return null;
+    const elev = (r: number, c: number) => {
+      const i = r * w + c;
+      return this.data.cells[i]?.inTank ? this.bedElevation(i) : this.basePositions[i * 3 + 1];
+    };
+    const fx = cf - c0;
+    const fz = rf - r0;
+    const top = elev(r0, c0) * (1 - fx) + elev(r0, c0 + 1) * fx;
+    const bottom = elev(r0 + 1, c0) * (1 - fx) + elev(r0 + 1, c0 + 1) * fx;
+    return top * (1 - fz) + bottom * fz;
+  }
+
+  private bedElevation(i: number): number {
+    const baseY = this.basePositions[i * 3 + 1];
+    return this.bedCarve
+      ? this.bedCarve(this.basePositions[i * 3], this.basePositions[i * 3 + 2], baseY)
+      : baseY;
+  }
+
+  private applyBedHeights() {
+    const posAttrBed = this.bedGeometry.attributes.position;
+    for (let i = 0; i < posAttrBed.count; i++) {
+      posAttrBed.setXYZ(
+        i,
+        this.basePositions[i * 3],
+        this.bedElevation(i) * this.options.verticalExaggeration,
+        this.basePositions[i * 3 + 2]
+      );
+    }
+    posAttrBed.needsUpdate = true;
+    this.bedGeometry.computeVertexNormals();
+    this.bedGeometry.computeBoundingSphere();
+  }
+
+  private applyBedColors() {
+    const colorAttr = this.bedGeometry.attributes.color as THREE.BufferAttribute;
+    const shallow = [0.22, 0.74, 0.97]; // #38bdf8 shallow water blue
+    const deep = [0.05, 0.29, 0.43];    // #0c4a6e submerged basin blue
+    for (let i = 0; i < colorAttr.count; i++) {
+      // Carved basin takes the geological colour of its new (deeper) elevation
+      const bed = this.bedCarve ? this.getGeologicalBedColor(this.bedElevation(i)) : [
+        this.bathyBedColors[i * 3], this.bathyBedColors[i * 3 + 1], this.bathyBedColors[i * 3 + 2]
+      ];
+      const wet = this.bedWetness ? this.bedWetness(this.basePositions[i * 3], this.basePositions[i * 3 + 2]) : null;
+      const rgb = [0, 0, 0];
+      for (let k = 0; k < 3; k++) {
+        if (wet === null) {
+          rgb[k] = bed[k];
+        } else {
+          const ring = bed[k] + (shallow[k] - bed[k]) * 0.5;
+          const submerged = bed[k] + (deep[k] - bed[k]) * 0.6;
+          rgb[k] = ring + (submerged - ring) * wet;
+        }
+      }
+      colorAttr.setXYZ(i, rgb[0], rgb[1], rgb[2]);
+    }
+    colorAttr.needsUpdate = true;
   }
 
   public setWireframe(enabled: boolean) {
@@ -321,19 +415,17 @@ export class TerrainMesh {
     this.basePositions = activeBase;
 
     const posAttrTerrain = this.terrainGeometry.attributes.position;
-    const posAttrBed = this.bedGeometry.attributes.position;
     const count = posAttrTerrain.count;
 
     for (let i = 0; i < count; i++) {
       const y = activeBase[i * 3 + 1] * this.options.verticalExaggeration;
       posAttrTerrain.setXYZ(i, activeBase[i * 3], y, activeBase[i * 3 + 2]);
-      posAttrBed.setXYZ(i, activeBase[i * 3], y, activeBase[i * 3 + 2]);
     }
 
     posAttrTerrain.needsUpdate = true;
-    posAttrBed.needsUpdate = true;
     this.terrainGeometry.computeVertexNormals();
-    this.bedGeometry.computeVertexNormals();
+    this.applyBedHeights();
+    this.applyBedColors();
   }
 
   public setVisible(visible: boolean) {

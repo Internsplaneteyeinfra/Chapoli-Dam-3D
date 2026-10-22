@@ -190,7 +190,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         <button className="btn-amber" onClick={onOpenVolumeStats} style={{ padding: '6px 11px', fontSize: 12 }}>
           <Mountain size={14} />
-          Sediment Volume
+          Silt Report
         </button>
 
         <button className="btn-secondary" onClick={onOpenImport} style={{ padding: '6px 11px', fontSize: 12 }}>

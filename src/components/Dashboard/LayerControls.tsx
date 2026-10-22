@@ -1,7 +1,7 @@
 import React from 'react';
 import { Eye, EyeOff, Layers, Scissors, Maximize2, Palette, Calendar } from 'lucide-react';
 import { DtmSurfaceMode } from '../../types/reservoir';
-import { SiltVisualMode } from '../../types/silt';
+import { SiltVisualMode, SiltTimelineItem } from '../../types/silt';
 
 interface LayerControlsProps {
   terrainVisible: boolean;
@@ -41,6 +41,9 @@ interface LayerControlsProps {
   setSiltOpacity?: (v: number) => void;
   siltThicknessMultiplier?: number;
   setSiltThicknessMultiplier?: (v: number) => void;
+  siltTimeline?: SiltTimelineItem[];
+  treesVisible?: boolean;
+  setTreesVisible?: (v: boolean) => void;
 }
 
 export const LayerControls: React.FC<LayerControlsProps> = ({
@@ -80,41 +83,35 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
   siltOpacity = 0.85,
   setSiltOpacity,
   siltThicknessMultiplier = 1.0,
-  setSiltThicknessMultiplier
+  setSiltThicknessMultiplier,
+  siltTimeline = [],
+  treesVisible = true,
+  setTreesVisible
 }) => {
   return (
     <div className="glass-panel" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-dim)', paddingBottom: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Layers size={16} color="var(--accent-cyan)" />
-          <h3 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            3D Layers & Visualization
-          </h3>
-        </div>
-      </div>
-
       {/* Layer Toggles */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12 }}>
         {/* Layer A: Surrounding Terrain */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '4px 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ color: 'var(--text-secondary)' }}>Layer A — Terrain & Basin</span>
+            <span style={{ color: 'var(--text-secondary)' }}>Ground</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <button
                 className={`btn-icon ${wireframe ? 'active' : ''}`}
                 onClick={() => setWireframe(!wireframe)}
-                title="Toggle Wireframe Mesh"
+                title="Show mesh grid lines"
                 style={{ width: 28, height: 28 }}
               >
-                <span style={{ fontSize: 10, fontWeight: 700 }}>WF</span>
+                <span style={{ fontSize: 10, fontWeight: 700 }}>Grid</span>
               </button>
               <button
                 className={`btn-icon ${hillshade ? 'active' : ''}`}
                 onClick={() => setHillshade(!hillshade)}
-                title="Toggle Hillshade Roughness"
+                title="Hill shading"
                 style={{ width: 28, height: 28 }}
               >
-                <span style={{ fontSize: 10, fontWeight: 700 }}>HS</span>
+                <span style={{ fontSize: 10, fontWeight: 700 }}>Shade</span>
               </button>
               <button
                 className={`btn-icon ${terrainVisible ? 'active' : ''}`}
@@ -129,12 +126,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
           {/* DTM Surface Selection Pill */}
           {setDtmMode && (
             <div style={{ padding: '6px 8px', background: 'rgba(15, 23, 42, 0.6)', borderRadius: 6, display: 'flex', flexDirection: 'column', gap: 5 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>DTM Surface Model:</span>
-                <span style={{ fontSize: 9, color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>
-                  {dtmMode === 'f30_dtm' ? 'f-30.tif Restored (31m – 50m)' : dtmMode === 'raw_fabdem' ? 'Raw Satellite (38.25m flat)' : 'Reconstructed (15.5m Thalweg)'}
-                </span>
-              </div>
+              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Ground model</span>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
                 <button
                   onClick={() => setDtmMode('bathymetric')}
@@ -149,9 +141,9 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
                     cursor: 'pointer',
                     transition: 'all 0.15s ease'
                   }}
-                  title="Reconstructed Basin: Surveyed 32-38m contours + 15.50m calibrated thalweg holding continuous water body"
+                  title="Survey contours with the basin down to the 15.5 m deepest bed"
                 >
-                  Reconstructed Basin
+                  Basin (default)
                 </button>
                 <button
                   onClick={() => setDtmMode('f30_dtm')}
@@ -166,9 +158,9 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
                     cursor: 'pointer',
                     transition: 'all 0.15s ease'
                   }}
-                  title="f-30.tif (+30m MSL Datum): 837 surveyed points from data_raw/f-30.tif (31m - 50m MSL bed) aligned with 2.3km landscape"
+                  title="f-30 survey points (31-50 m)"
                 >
-                  f-30.tif (+30m MSL)
+                  f-30 survey
                 </button>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 4 }}>
@@ -185,9 +177,9 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
                     cursor: 'pointer',
                     transition: 'all 0.15s ease'
                   }}
-                  title="Raw XYZ Satellite DTM: 62,366 points from Chapoli_M_I_Tank_XYZ.csv (water flat at 38.25m)"
+                  title="Raw satellite terrain (reservoir flat at 38.25 m)"
                 >
-                  Raw XYZ Satellite DTM (62,366 pts)
+                  Raw satellite terrain
                 </button>
               </div>
             </div>
@@ -197,7 +189,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
         {/* Layer B: Reservoir Water */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '4px 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ color: 'var(--text-secondary)' }}>Layer B — Reservoir Water</span>
+            <span style={{ color: 'var(--text-secondary)' }}>What-if water level</span>
             <button
               className={`btn-icon ${waterVisible ? 'active' : ''}`}
               onClick={() => setWaterVisible(!waterVisible)}
@@ -225,7 +217,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
 
         {/* Layer C: Present Reservoir Bed */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0' }}>
-          <span style={{ color: 'var(--text-secondary)' }}>Layer C — Present Reservoir Bed</span>
+          <span style={{ color: 'var(--text-secondary)' }}>Reservoir bed</span>
           <button
             className={`btn-icon ${bedVisible ? 'active' : ''}`}
             onClick={() => setBedVisible(!bedVisible)}
@@ -239,16 +231,32 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
         {setDamVisible && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Layer D — Earthen Dam (El. 41.00m)</span>
-              <span className="badge badge-observed" style={{ fontSize: 9, padding: '1px 5px' }}>760m Axis</span>
+              <span style={{ color: 'var(--text-secondary)' }}>Dam</span>
             </div>
             <button
               className={`btn-icon ${damVisible ? 'active' : ''}`}
               onClick={() => setDamVisible(!damVisible)}
               style={{ width: 28, height: 28 }}
-              title="Toggle 760m Earthen Dam Embankment, Spillway & Height Caliper"
+              title="Show the dam"
             >
               {damVisible ? <Eye size={14} /> : <EyeOff size={14} />}
+            </button>
+          </div>
+        )}
+
+        {/* Layer: 3D Trees & Forest Vegetation */}
+        {setTreesVisible && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ color: 'var(--text-secondary)' }}>Trees</span>
+            </div>
+            <button
+              className={`btn-icon ${treesVisible ? 'active' : ''}`}
+              onClick={() => setTreesVisible(!treesVisible)}
+              style={{ width: 28, height: 28 }}
+              title="Show trees"
+            >
+              {treesVisible ? <Eye size={14} /> : <EyeOff size={14} />}
             </button>
           </div>
         )}
@@ -257,14 +265,13 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '4px 0', borderTop: '1px solid var(--border-dim)', paddingTop: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>Layer E — Sentinel-2 Silt</span>
-              <span className="badge badge-observed" style={{ fontSize: 9, padding: '1px 5px' }}>10 Months</span>
+              <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>Silt</span>
             </div>
             <button
               className={`btn-icon ${siltVisible ? 'active' : ''}`}
               onClick={() => setSiltVisible?.(!siltVisible)}
               style={{ width: 28, height: 28 }}
-              title="Toggle 2026 Monthly Silt Classification & Volume Surface"
+              title="Show silt"
             >
               {siltVisible ? <Eye size={14} /> : <EyeOff size={14} />}
             </button>
@@ -275,7 +282,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
               {/* Month Selector & Visual Mode */}
               <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 6 }}>
                 <div>
-                  <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Survey Month:</label>
+                  <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Month</label>
                   <select
                     value={siltMonth}
                     onChange={(e) => setSiltMonth?.(e.target.value)}
@@ -290,20 +297,15 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
                       outline: 'none'
                     }}
                   >
-                    <option value="jan">Jan 2026 (216.8k m³)</option>
-                    <option value="feb">Feb 2026 (164.6k m³)</option>
-                    <option value="mar">Mar 2026 (206.1k m³)</option>
-                    <option value="apr">Apr 2026 (189.3k m³)</option>
-                    <option value="may">May 2026 (213.6k m³)</option>
-                    <option value="jun">Jun 2026 (199.6k m³)</option>
-                    <option value="jul">Jul 2026 (Cloud Mask)</option>
-                    <option value="aug">Aug 2026 (223.1k m³)</option>
-                    <option value="sep">Sep 2026 (Peak 260.3k m³)</option>
-                    <option value="oct">Oct 2026 (179.4k m³)</option>
+                    {siltTimeline.map(m => (
+                      <option key={m.key} value={m.key}>
+                        {m.month} 2026 ({m.isPeak ? 'Peak ' : ''}{(m.volumeM3 / 1000).toFixed(1)}k m³)
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
-                  <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Silt Mode:</label>
+                  <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>Show as</label>
                   <div style={{ display: 'flex', background: 'rgba(15, 23, 42, 0.6)', padding: 2, borderRadius: 4, border: '1px solid var(--border-dim)' }}>
                     <button
                       onClick={() => setSiltVisualMode?.('classification')}
@@ -319,7 +321,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
                         cursor: 'pointer'
                       }}
                     >
-                      4-Class
+                      Classes
                     </button>
                     <button
                       onClick={() => setSiltVisualMode?.('volume')}
@@ -358,7 +360,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
 
               {/* Physical Thickness Extrusion Slider */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Lift:</span>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Thickness:</span>
                 <input
                   type="range"
                   min={0.0}
@@ -376,7 +378,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
 
         {/* 1m Contours */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0' }}>
-          <span style={{ color: 'var(--text-secondary)' }}>Contour Lines (1m interval)</span>
+          <span style={{ color: 'var(--text-secondary)' }}>Contour lines</span>
           <button
             className={`btn-icon ${contoursVisible ? 'active' : ''}`}
             onClick={() => setContoursVisible(!contoursVisible)}
@@ -392,30 +394,23 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600 }}>
             <Palette size={13} color="var(--accent-amber)" />
-            <span>{siltVisualMode === 'classification' ? 'Sentinel-2 Silt Classes' : 'Silt Volume Heatmap Scale'}</span>
+            <span>{siltVisualMode === 'classification' ? 'Silt classes' : 'Silt amount'}</span>
           </div>
-          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-            {siltVisualMode === 'classification' ? '4 Tiers' : 'm³ / 100m²'}
-          </span>
         </div>
 
         {siltVisualMode === 'classification' ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4, textAlign: 'center', fontSize: 9 }}>
             <div style={{ background: 'rgba(34, 197, 94, 0.2)', border: '1px solid #22c55e', borderRadius: 4, padding: '3px 2px', color: '#86efac' }}>
-              <span style={{ fontWeight: 700, display: 'block' }}>1. Low</span>
-              <span style={{ opacity: 0.8 }}>Clear</span>
+              <span style={{ fontWeight: 700 }}>Low</span>
             </div>
             <div style={{ background: 'rgba(234, 179, 8, 0.2)', border: '1px solid #eab308', borderRadius: 4, padding: '3px 2px', color: '#fde047' }}>
-              <span style={{ fontWeight: 700, display: 'block' }}>2. Mod</span>
-              <span style={{ opacity: 0.8 }}>Littoral</span>
+              <span style={{ fontWeight: 700 }}>Moderate</span>
             </div>
             <div style={{ background: 'rgba(249, 115, 22, 0.2)', border: '1px solid #f97316', borderRadius: 4, padding: '3px 2px', color: '#fdba74' }}>
-              <span style={{ fontWeight: 700, display: 'block' }}>3. High</span>
-              <span style={{ opacity: 0.8 }}>Inflow</span>
+              <span style={{ fontWeight: 700 }}>High</span>
             </div>
             <div style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid #ef4444', borderRadius: 4, padding: '3px 2px', color: '#fca5a5' }}>
-              <span style={{ fontWeight: 700, display: 'block' }}>4. V.High</span>
-              <span style={{ opacity: 0.8 }}>Deposition</span>
+              <span style={{ fontWeight: 700 }}>Very high</span>
             </div>
           </div>
         ) : (
@@ -428,9 +423,8 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
               }}
             />
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', marginTop: 4 }}>
-              <span>0.0 m³</span>
-              <span>48.3 m³</span>
-              <span>96.6 m³</span>
+              <span>Less</span>
+              <span>More</span>
             </div>
           </div>
         )}
@@ -439,7 +433,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
       {/* Vertical Exaggeration Slider */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 4 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11 }}>
-          <span style={{ color: 'var(--text-secondary)' }}>Vertical Exaggeration:</span>
+          <span style={{ color: 'var(--text-secondary)' }}>Height scale</span>
           <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>
             {verticalExaggeration.toFixed(1)}x
           </strong>
@@ -452,9 +446,6 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
           value={verticalExaggeration}
           onChange={(e) => setVerticalExaggeration(parseFloat(e.target.value))}
         />
-        <span style={{ fontSize: 9, color: 'var(--text-muted)', lineHeight: 1.3 }}>
-          Visual scaling only. All calculations & coordinate readouts strictly use 1:1 real metrics.
-        </span>
       </div>
 
       {/* Section Cut Tool */}
@@ -462,14 +453,14 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <Scissors size={13} color="var(--accent-cyan)" />
-            <span style={{ color: 'var(--text-secondary)' }}>Section Cut (East-West):</span>
+            <span style={{ color: 'var(--text-secondary)' }}>Cross-section</span>
           </div>
           {sectionCutX !== null ? (
             <button
               onClick={() => setSectionCutX(null)}
               style={{ background: 'none', border: 'none', color: '#f43f5e', fontSize: 10, cursor: 'pointer', fontWeight: 600 }}
             >
-              Reset Cut
+              Turn off
             </button>
           ) : (
             <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Off</span>

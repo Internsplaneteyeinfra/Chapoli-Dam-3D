@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
+import { Thermometer, Wind, ArrowUp } from 'lucide-react';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { ChapoliData, InspectionResult, DataProvenance, DtmSurfaceMode } from '../../types/reservoir';
 import { GeoTransform } from '../../utils/coordinates';
@@ -13,8 +14,19 @@ import { InspectionMarker } from './InspectionMarker';
 import { TransectLineVisual } from './TransectLine';
 import { SiltLayer } from './SiltLayer';
 import { SiltVisualMode, SiltSeriesPayload } from '../../types/silt';
+import { PermanentWaterLayer } from './PermanentWaterLayer';
+import { WaterDepthPayload, sampleWaterDepth, sampleWaterWetness, carveBedToWaterBottom } from '../../types/waterDepth';
 import { CompassWidget } from './CompassWidget';
+import { SectionCap } from './SectionCap';
+import { LiveSky } from './LiveSky';
+import { WeatherEffects } from './WeatherEffects';
+import {
+  fetchLiveWeather, solarPosition, skyPaletteFor, describeWeather, LiveWeather, applyWeatherOverride, compassLabel
+} from '../../utils/liveWeather';
 import { ScaleBar } from './ScaleBar';
+import rawVegetationData from '../../data/vegetation.json';
+import { VegetationLayer } from './VegetationLayer';
+import { VegetationPayload } from '../../types/vegetation';
 
 export interface ReservoirCanvasProps {
   data: ChapoliData;
@@ -25,6 +37,7 @@ export interface ReservoirCanvasProps {
   waterOpacity: number;
   bedVisible: boolean;
   damVisible?: boolean;
+  treesVisible?: boolean;
   sedimentVisible: boolean;
   sedimentOpacity: number;
   contoursVisible: boolean;
@@ -43,7 +56,25 @@ export interface ReservoirCanvasProps {
   siltVisualMode?: SiltVisualMode;
   siltOpacity?: number;
   siltThicknessMultiplier?: number;
+  waterDepthData?: WaterDepthPayload;
+  permanentWaterVisible?: boolean;
+  permanentWaterOpacity?: number;
+  /** Observed level (m MSL) the satellite water surface sits at; independent of the simulation slider */
+  permanentWaterLevel?: number;
+  permanentWaterDepthScale?: number;
+  viewPresetTrigger?: { preset: 'perspective' | 'top' | 'depth' | 'side' | 'reset' | 'section'; timestamp: number } | null;
+  navigationRightOffset?: number;
 }
+
+// Home view shown on load, by Perspective and by Reset: elevated from the west,
+// looking east over the dam into the basin (framed for the default 4x exaggeration)
+const HOME_CAMERA_POSITION = new THREE.Vector3(-1180, 730, -190);
+const HOME_CAMERA_TARGET = new THREE.Vector3(-30, 110, 30);
+
+// Furthest mouse zoom-out (about twice the home view distance, still framing the basin)
+const MAX_ZOOM_OUT_DISTANCE = 2600;
+// Live sky refresh from Open-Meteo
+const LIVE_SKY_REFRESH_MS = 15 * 60 * 1000;
 
 export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
   data,
@@ -54,6 +85,7 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
   waterOpacity,
   bedVisible,
   damVisible = true,
+  treesVisible = true,
   sedimentVisible,
   sedimentOpacity,
   contoursVisible,
@@ -71,7 +103,14 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
   siltMonth = 'sep',
   siltVisualMode = 'classification',
   siltOpacity = 0.85,
-  siltThicknessMultiplier = 1.0
+  siltThicknessMultiplier = 1.0,
+  waterDepthData,
+  permanentWaterVisible = true,
+  permanentWaterOpacity = 0.88,
+  permanentWaterLevel = 38.25,
+  permanentWaterDepthScale = 3,
+  viewPresetTrigger,
+  navigationRightOffset = 70
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -80,20 +119,40 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
   const controlsRef = useRef<OrbitControls | null>(null);
 
   const terrainRef = useRef<TerrainMesh | null>(null);
+  const vegetationRef = useRef<VegetationLayer | null>(null);
   const waterRef = useRef<WaterSurface | null>(null);
   const damRef = useRef<DamEmbankment | null>(null);
   const contoursRef = useRef<ContourLines | null>(null);
   const sedimentRef = useRef<SedimentLayer | null>(null);
   const siltRef = useRef<SiltLayer | null>(null);
+  const permanentWaterRef = useRef<PermanentWaterLayer | null>(null);
+  const sectionCapRef = useRef<SectionCap | null>(null);
+  const skyRef = useRef<LiveSky | null>(null);
+  const weatherFxRef = useRef<WeatherEffects | null>(null);
+  const [liveWeather, setLiveWeather] = useState<LiveWeather | null>(null);
+  const sectionCutRef = useRef<number | null>(sectionCutX);
+  sectionCutRef.current = sectionCutX;
   const markerRef = useRef<InspectionMarker | null>(null);
   const transectVisualRef = useRef<TransectLineVisual | null>(null);
 
   const engineRef = useRef<SedimentAnalysisEngine>(new SedimentAnalysisEngine(data));
   const geoRef = useRef<GeoTransform>(new GeoTransform(data.origin));
 
+  const [activePreset, setActivePreset] = useState<'perspective' | 'top' | 'depth' | 'side'>('perspective');
   const [cameraDistance, setCameraDistance] = useState<number>(1400);
   const [cameraRotationY, setCameraRotationY] = useState<number>(0);
   const [hoverInfo, setHoverInfo] = useState<{ x: number; y: number; text: string } | null>(null);
+
+  // Smooth cinematic camera transition state
+  const cameraTransitionRef = useRef<{
+    isTransitioning: boolean;
+    startTime: number;
+    duration: number;
+    startPos: THREE.Vector3;
+    targetPos: THREE.Vector3;
+    startLookAt: THREE.Vector3;
+    targetLookAt: THREE.Vector3;
+  } | null>(null);
 
   // Cross-section interactive click-to-draw state
   const transectClickState = useRef<{ firstPoint: [number, number] | null }>({ firstPoint: null });
@@ -107,14 +166,24 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
 
     // 1. Scene with atmospheric horizon
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a1526); // Atmospheric twilight mountain horizon
-    scene.fog = new THREE.FogExp2(0x0a1526, 0.00032); // Soft distance haze
+    // Light haze in the sky's horizon colour (updated by the live sky) so distant terrain stays bright
+    scene.background = new THREE.Color(0xbfe0f4);
+    scene.fog = new THREE.FogExp2(0xbfe0f4, 0.00011);
     sceneRef.current = scene;
+
+    const sky = new LiveSky();
+    scene.add(sky.mesh);
+    skyRef.current = sky;
+
+    const weatherFx = new WeatherEffects();
+    scene.add(weatherFx.group);
+    weatherFxRef.current = weatherFx;
+    let lastElapsed = 0;
 
     // 2. Camera: Elevated three-quarter perspective framing reservoir, surrounding hills and earthen dam
     const camera = new THREE.PerspectiveCamera(40, width / height, 1, 18000);
-    camera.position.set(-680, 420, 680);
-    camera.lookAt(-80, 32, -20);
+    camera.position.copy(HOME_CAMERA_POSITION);
+    camera.lookAt(HOME_CAMERA_TARGET);
     cameraRef.current = camera;
 
     // 3. Renderer with local clipping enabled for Section Cuts
@@ -133,18 +202,19 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
     controls.dampingFactor = 0.05;
     controls.maxPolarAngle = Math.PI / 2 - 0.03; // Keep above ground plane
     controls.minDistance = 50;
-    controls.maxDistance = 6000;
-    controls.target.set(-80, 32, -20);
+    controls.maxDistance = MAX_ZOOM_OUT_DISTANCE;
+    controls.target.copy(HOME_CAMERA_TARGET);
     controlsRef.current = controls;
 
-    // 5. Lighting: Sun + Sky Hemisphere + Soft Ambient
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.42);
+    // 5. Lighting: Sun + Sky Hemisphere + Soft Ambient.
+    // Fixed and bright on purpose: the map stays well lit whatever the live sky shows (incl. night).
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
     scene.add(ambientLight);
 
-    const hemiLight = new THREE.HemisphereLight(0xdbeafe, 0x1e3a1e, 0.65);
+    const hemiLight = new THREE.HemisphereLight(0xe0f2fe, 0x3f5f3a, 0.9);
     scene.add(hemiLight);
 
-    const dirLight = new THREE.DirectionalLight(0xfff7ed, 1.45);
+    const dirLight = new THREE.DirectionalLight(0xfff7ed, 1.6);
     dirLight.position.set(750, 1300, 650);
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.width = 2048;
@@ -208,11 +278,36 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
         visualMode: siltVisualMode,
         opacity: siltOpacity,
         verticalExaggeration,
-        thicknessMultiplier: siltThicknessMultiplier
+        thicknessMultiplier: siltThicknessMultiplier,
+        depthScale: permanentWaterDepthScale
       });
       scene.add(silt.group);
       siltRef.current = silt;
     }
+
+    if (waterDepthData) {
+      const permanentWater = new PermanentWaterLayer(waterDepthData, {
+        visible: permanentWaterVisible,
+        waterLevel: permanentWaterLevel,
+        depthScale: permanentWaterDepthScale,
+        verticalExaggeration,
+        opacity: permanentWaterOpacity
+      });
+      scene.add(permanentWater.group);
+      permanentWaterRef.current = permanentWater;
+    }
+
+    const sectionCap = new SectionCap();
+    scene.add(sectionCap.group);
+    sectionCapRef.current = sectionCap;
+
+    // 6H. Western Ghats Trees & Natural Forest Vegetation
+    const vegetation = new VegetationLayer((rawVegetationData as unknown) as VegetationPayload, {
+      visible: treesVisible,
+      verticalExaggeration
+    });
+    scene.add(vegetation.group);
+    vegetationRef.current = vegetation;
 
     const marker = new InspectionMarker();
     scene.add(marker.group);
@@ -228,9 +323,30 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
 
     const animate = () => {
       animId = requestAnimationFrame(animate);
-      controls.update();
 
+      if (cameraTransitionRef.current?.isTransitioning) {
+        const { startTime, duration, startPos, targetPos, startLookAt, targetLookAt } = cameraTransitionRef.current;
+        const elapsed = performance.now() - startTime;
+        const t = Math.min(1, elapsed / duration);
+        // Smooth cubic ease-in-out curve
+        const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+        camera.position.lerpVectors(startPos, targetPos, ease);
+        controls.target.lerpVectors(startLookAt, targetLookAt, ease);
+        controls.update();
+
+        if (t >= 1) {
+          cameraTransitionRef.current.isTransitioning = false;
+        }
+      } else {
+        controls.update();
+      }
+
+      sky.update(camera, clock.elapsedTime);
+      weatherFx.update(clock.elapsedTime - lastElapsed);
+      lastElapsed = clock.elapsedTime;
       water.animate(clock);
+      permanentWaterRef.current?.animate(clock);
       marker.animate(clock);
 
       const dist = camera.position.distanceTo(controls.target);
@@ -262,6 +378,11 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
       contours.dispose();
       sediment.dispose();
       siltRef.current?.dispose();
+      permanentWaterRef.current?.dispose();
+      vegetation.dispose();
+      sectionCap.dispose();
+      sky.dispose();
+      weatherFx.dispose();
       marker.dispose();
       transectVisual.dispose();
       renderer.dispose();
@@ -269,7 +390,7 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
         container.removeChild(renderer.domElement);
       }
     };
-  }, [data, siltData]);
+  }, [data, siltData, waterDepthData]);
 
   // Handle Layer Updates
   useEffect(() => {
@@ -279,7 +400,24 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
     contoursRef.current?.updateExaggeration(verticalExaggeration);
     sedimentRef.current?.updateExaggeration(verticalExaggeration);
     siltRef.current?.updateExaggeration(verticalExaggeration);
+    permanentWaterRef.current?.updateExaggeration(verticalExaggeration);
+    vegetationRef.current?.setVerticalExaggeration(verticalExaggeration);
   }, [verticalExaggeration]);
+
+  useEffect(() => {
+    vegetationRef.current?.setVisible(treesVisible);
+  }, [treesVisible]);
+
+  useEffect(() => {
+    permanentWaterRef.current?.setVisible(permanentWaterVisible);
+    permanentWaterRef.current?.setOpacity(permanentWaterOpacity);
+    // Shade the (carved) bed as water while the satellite water is shown
+    terrainRef.current?.setBedWaterTint(
+      waterDepthData && permanentWaterVisible
+        ? (x, z) => sampleWaterWetness(waterDepthData, x, z)
+        : null
+    );
+  }, [permanentWaterVisible, permanentWaterOpacity, waterDepthData]);
 
   useEffect(() => {
     siltRef.current?.setVisible(siltVisible);
@@ -310,6 +448,32 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
   }, [waterLevel]);
 
   useEffect(() => {
+    permanentWaterRef.current?.setWaterLevel(permanentWaterLevel);
+  }, [permanentWaterLevel]);
+
+  useEffect(() => {
+    permanentWaterRef.current?.setDepthScale(permanentWaterDepthScale);
+    siltRef.current?.setDepthScale(permanentWaterDepthScale);
+  }, [permanentWaterDepthScale]);
+
+  // Lower the reservoir bed to the satellite water bottom (with or without the water shown),
+  // and drape the silt on that lowered bed
+  useEffect(() => {
+    const carve = waterDepthData
+      ? (x: number, z: number, baseElev: number) =>
+          carveBedToWaterBottom(waterDepthData, x, z, baseElev, permanentWaterLevel, permanentWaterDepthScale)
+      : null;
+    terrainRef.current?.setBedCarve(carve);
+    siltRef.current?.setCapLevel(waterDepthData ? permanentWaterLevel : undefined);
+    siltRef.current?.setBedElevationFn(carve);
+  }, [waterDepthData, permanentWaterLevel, permanentWaterDepthScale]);
+
+  // Water side walls clutter the solid silt deposit; show them only while silt is off
+  useEffect(() => {
+    permanentWaterRef.current?.setBodyVisible(!siltVisible);
+  }, [siltVisible]);
+
+  useEffect(() => {
     waterRef.current?.setVisible(waterVisible);
     waterRef.current?.setOpacity(waterOpacity);
   }, [waterVisible, waterOpacity]);
@@ -334,6 +498,77 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
     sedimentRef.current?.setOpacity(sedimentOpacity);
     sedimentRef.current?.setSampleMode(sampleMode);
   }, [sedimentVisible, sedimentOpacity, sampleMode]);
+
+  // Live sky: current weather (Open-Meteo) + real sun position for the reservoir location.
+  // Weather refreshes every 15 min; the sun position is recomputed every minute.
+  useEffect(() => {
+    const [lon, lat] = geoRef.current.localToWGS84(HOME_CAMERA_TARGET.x, HOME_CAMERA_TARGET.z);
+    let weather: LiveWeather | null = null;
+    let cancelled = false;
+
+    const applySky = () => {
+      if (!weather || !skyRef.current || !sceneRef.current) return;
+      const palette = skyPaletteFor(weather, solarPosition(new Date(), lat, lon));
+      skyRef.current.apply(palette, solarPosition(new Date(), lat, lon));
+      const horizon = new THREE.Color().setRGB(...palette.horizon);
+      (sceneRef.current.background as THREE.Color).copy(horizon);
+      (sceneRef.current.fog as THREE.FogExp2).color.copy(horizon);
+    };
+    const refresh = async () => {
+      const w = applyWeatherOverride(await fetchLiveWeather(lat, lon));
+      if (cancelled) return;
+      weather = w;
+      setLiveWeather(w);
+      weatherFxRef.current?.setWeather(w);
+      const drift = weatherFxRef.current?.windVector;
+      if (drift) skyRef.current?.setWind(drift.x, drift.y);
+      applySky();
+    };
+
+    refresh();
+    const weatherTimer = window.setInterval(refresh, LIVE_SKY_REFRESH_MS);
+    const sunTimer = window.setInterval(applySky, 60 * 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(weatherTimer);
+      clearInterval(sunTimer);
+    };
+  }, [data]);
+
+  // Where raindrops land: the satellite water surface when shown, otherwise the (carved) ground
+  useEffect(() => {
+    const fx = weatherFxRef.current;
+    const terrain = terrainRef.current;
+    if (!fx || !terrain) return;
+    fx.setSurface((x, z) => {
+      if (waterDepthData && permanentWaterVisible && sampleWaterDepth(waterDepthData, x, z) !== null) {
+        return { y: permanentWaterLevel * verticalExaggeration, water: true };
+      }
+      const elev = terrain.sampleSurfaceElevation(x, z);
+      return elev === null ? null : { y: elev * verticalExaggeration, water: false };
+    });
+  }, [waterDepthData, permanentWaterVisible, permanentWaterLevel, permanentWaterDepthScale, verticalExaggeration, dtmMode]);
+
+  // Filled cross-section face (earth / silt band / water) on the clipping plane.
+  // Declared after the layer effects so it samples their updated state.
+  useEffect(() => {
+    const cap = sectionCapRef.current;
+    if (!cap || !terrainRef.current) return;
+    if (sectionCutX === null) {
+      cap.clear();
+      return;
+    }
+    cap.build({
+      cutX: sectionCutX,
+      verticalExaggeration,
+      terrain: terrainRef.current,
+      silt: siltRef.current,
+      waterDepthData,
+      waterVisible: permanentWaterVisible,
+      waterLevel: permanentWaterLevel
+    });
+  }, [sectionCutX, verticalExaggeration, siltVisible, siltMonth, siltVisualMode, siltThicknessMultiplier,
+      permanentWaterVisible, permanentWaterLevel, permanentWaterDepthScale, waterDepthData, dtmMode]);
 
   // Section cut clipping plane
   useEffect(() => {
@@ -364,6 +599,16 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
     }
   }, [transectPoints, verticalExaggeration]);
 
+  // Satellite water plane is bbox-sized; only count hits on its non-transparent water pixels
+  const isPickable = useCallback((hit: THREE.Intersection) => {
+    const ud = hit.object.userData;
+    if (ud?.isPermanentWater) {
+      return !!waterDepthData && !!permanentWaterRef.current?.group.visible
+        && sampleWaterDepth(waterDepthData, hit.point.x, hit.point.z) !== null;
+    }
+    return ud?.isTerrain || ud?.isWater || ud?.isDam || ud?.isSiltLayer;
+  }, [waterDepthData]);
+
   // Click Raycaster: Point Inspection & Interactive Transect Drawing
   const handleCanvasClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (!containerRef.current || !cameraRef.current || !sceneRef.current) return;
@@ -378,7 +623,7 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
 
     // Intersect with terrain, water surface, dam structure, or silt layer
     const intersects = raycaster.intersectObjects(sceneRef.current.children, true);
-    const validHit = intersects.find(hit => hit.object.userData?.isTerrain || hit.object.userData?.isWater || hit.object.userData?.isDam || hit.object.userData?.isSiltLayer);
+    const validHit = intersects.find(isPickable);
 
     if (validHit) {
       const hitPt = validHit.point;
@@ -461,7 +706,7 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
       let siltMonthName: string | undefined = undefined;
 
       if (siltData && inTank) {
-        const monthRecord = siltData.months[siltMonth] || siltData.months['sep'];
+        const monthRecord = siltData.months[siltMonth] || siltData.months[siltData.activeDefaultMonth];
         siltMonthName = monthRecord.name;
         const bbox = siltData.bbox.local;
         if (localX >= bbox.minX && localX <= bbox.maxX && localZ >= bbox.minZ && localZ <= bbox.maxZ) {
@@ -474,10 +719,10 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
 
           if (classVal > 0) {
             const classMap: Record<number, { name: 'Low' | 'Moderate' | 'High' | 'Very High'; color: string }> = {
-              1: { name: 'Low', color: '#00FF00' },
-              2: { name: 'Moderate', color: '#FFFF00' },
-              3: { name: 'High', color: '#FFA500' },
-              4: { name: 'Very High', color: '#FF0000' }
+              1: { name: 'Low', color: '#22c55e' },
+              2: { name: 'Moderate', color: '#eab308' },
+              3: { name: 'High', color: '#f97316' },
+              4: { name: 'Very High', color: '#ef4444' }
             };
             siltClass = classMap[classVal]?.name;
             siltClassColor = classMap[classVal]?.color;
@@ -487,30 +732,39 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
         }
       }
 
-      if (!isSubmerged) {
+      const satelliteDepth = validHit.object.userData?.isPermanentWater && waterDepthData
+        ? sampleWaterDepth(waterDepthData, localX, localZ)
+        : null;
+
+      if (siltVisible && siltClass) {
+        sedimentThickness = siltThicknessM ?? null;
+        provenance = 'OBSERVED';
+        qualityNote = `Observed Sentinel-2 Silt (${siltMonthName}): ${siltClass} Class, ${siltVolumeScore?.toFixed(1)} m³/100m² pixel volume score`;
+      } else if (satelliteDepth !== null && waterDepthData) {
+        provenance = 'OBSERVED';
+        qualityNote = `Sentinel-1 permanent water (${waterDepthData.water.imageDate}) | Sentinel-2 relative depth ${satelliteDepth.toFixed(2)} m (${waterDepthData.depth.imageDate}, band-ratio estimate, not survey-grade)`;
+      } else if (!isSubmerged) {
         // Point is on dry ground above current waterline or outside reservoir
         sedimentThickness = null;
         qualityNote = inTank
           ? 'Dry shoreline ground above current water level (no underwater sediment deposit)'
           : 'Dry surrounding terrain outside reservoir boundary';
-      } else if (siltClass && !sampleMode) {
-        sedimentThickness = siltThicknessM ?? null;
-        provenance = 'OBSERVED';
-        qualityNote = `Observed Sentinel-2 Silt (${siltMonthName}): ${siltClass} Class, ${siltVolumeScore?.toFixed(1)} m³/100m²`;
       } else if (sampleMode && origBedElev !== null && presBedElev !== null && origBedElev < presBedElev) {
         sedimentThickness = Math.round((presBedElev - origBedElev) * 100) / 100;
         provenance = 'SIMULATED';
         qualityNote = 'Simulated sedimentation deposit against modeled pre-impoundment thalweg';
-      } else if (!sampleMode && inTank) {
-        qualityNote = 'Measured present bed. Pre-impoundment baseline surface unavailable in source files.';
+      } else {
+        sedimentThickness = null;
+        provenance = 'OBSERVED';
+        qualityNote = 'Survey Bathymetry DTM Bed Level';
       }
 
-      // Update 3D Marker: only draw vertical caliper if submerged with sediment thickness
+      // Update 3D Marker: only draw vertical caliper if submerged with sediment thickness and silt is ON
       markerRef.current?.setPosition(
         localX,
         (presBedElev ?? 34) * verticalExaggeration,
         localZ,
-        isSubmerged && sedimentThickness !== null ? origBedElev : null,
+        isSubmerged && sedimentThickness !== null && siltVisible ? origBedElev : null,
         verticalExaggeration
       );
 
@@ -523,7 +777,7 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
         lat: Number(lat.toFixed(6)),
         elevation: presBedElev,
         waterLevel,
-        waterDepth,
+        waterDepth: satelliteDepth !== null ? Math.round(satelliteDepth * 100) / 100 : waterDepth,
         originalBedElev: isSubmerged ? origBedElev : null,
         sedimentThickness,
         inTank,
@@ -538,7 +792,7 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
 
       onPointInspected(inspection);
     }
-  }, [activeTool, waterLevel, verticalExaggeration, sampleMode, onPointInspected, onTransectDrawn, siltData, siltMonth]);
+  }, [activeTool, waterLevel, verticalExaggeration, sampleMode, siltVisible, onPointInspected, onTransectDrawn, siltData, siltMonth, isPickable, waterDepthData]);
 
   // Hover Raycaster for Quick Tooltip
   const handleMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
@@ -552,7 +806,7 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(mouse, cameraRef.current);
     const intersects = raycaster.intersectObjects(sceneRef.current.children, true);
-    const validHit = intersects.find(hit => hit.object.userData?.isTerrain || hit.object.userData?.isWater || hit.object.userData?.isDam || hit.object.userData?.isSiltLayer);
+    const validHit = intersects.find(isPickable);
 
     if (validHit) {
       const localX = validHit.point.x;
@@ -563,6 +817,9 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
       if (validHit.object.userData?.isDam) {
         const isCrest = validHit.object.userData?.component === 'crest';
         tooltipText = `Chapoli Dam Embankment | Elev: ${isCrest ? '41.00m (Crest Road)' : (validHit.point.y / verticalExaggeration).toFixed(1) + 'm (Slope)'} | 760m Axis`;
+      } else if (validHit.object.userData?.isPermanentWater && waterDepthData) {
+        const depthM = sampleWaterDepth(waterDepthData, localX, localZ);
+        tooltipText = `Permanent Water | Depth: ${depthM !== null ? depthM.toFixed(1) + 'm' : 'NoData'} (relative) | ${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E`;
       } else if (validHit.object.userData?.isSiltLayer) {
         tooltipText = `Sentinel-2 Silt Layer (${siltMonth.toUpperCase()}) | ${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E`;
       } else {
@@ -578,51 +835,105 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
     } else {
       setHoverInfo(null);
     }
+  }, [isPickable, waterDepthData, siltMonth, verticalExaggeration]);
+
+  // Smooth View Preset Transitions
+  const smoothTransitionTo = useCallback((targetPos: THREE.Vector3, targetLookAt: THREE.Vector3, duration = 1000) => {
+    if (!cameraRef.current || !controlsRef.current) return;
+    cameraTransitionRef.current = {
+      isTransitioning: true,
+      startTime: performance.now(),
+      duration,
+      startPos: cameraRef.current.position.clone(),
+      targetPos,
+      startLookAt: controlsRef.current.target.clone(),
+      targetLookAt
+    };
   }, []);
 
-  // View Preset Helpers
-  const setTopView = () => {
-    if (!cameraRef.current || !controlsRef.current) return;
-    cameraRef.current.position.set(-80, 1400, -9.8);
-    controlsRef.current.target.set(-80, 32, -10);
-    cameraRef.current.lookAt(-80, 32, -10);
-    controlsRef.current.update();
-  };
+  const setTopView = useCallback(() => {
+    smoothTransitionTo(new THREE.Vector3(-80, 1400, -9.8), new THREE.Vector3(-80, 32, -10), 1000);
+    setActivePreset('top');
+  }, [smoothTransitionTo]);
 
-  const setSideView = () => {
-    if (!cameraRef.current || !controlsRef.current) return;
+  const setSideView = useCallback(() => {
     // Elevated Western Side Profile looking eastward across the 760m Dam Embankment and reservoir basin
-    cameraRef.current.position.set(-1050, 200, 0);
-    controlsRef.current.target.set(-80, 35, 0);
-    cameraRef.current.lookAt(-80, 35, 0);
-    controlsRef.current.update();
-  };
+    smoothTransitionTo(new THREE.Vector3(-1050, 200, 0), new THREE.Vector3(-80, 35, 0), 1000);
+    setActivePreset('side');
+  }, [smoothTransitionTo]);
 
-  const setPerspectiveView = () => {
-    if (!cameraRef.current || !controlsRef.current) return;
+  const setPerspectiveView = useCallback(() => {
     // Elevated three-quarter perspective framing reservoir, surrounding hills and earthen dam
-    cameraRef.current.position.set(-680, 420, 680);
-    controlsRef.current.target.set(-80, 32, -20);
-    cameraRef.current.lookAt(-80, 32, -20);
-    controlsRef.current.update();
-  };
+    smoothTransitionTo(HOME_CAMERA_POSITION.clone(), HOME_CAMERA_TARGET.clone(), 1000);
+    setActivePreset('perspective');
+  }, [smoothTransitionTo]);
 
-  const setLowObliqueView = () => {
-    if (!cameraRef.current || !controlsRef.current) return;
+  const setLowObliqueView = useCallback(() => {
     // Dam Abutment perspective inspecting the deep intake basin and upstream reservoir pool
-    cameraRef.current.position.set(-540, 160, -380);
-    controlsRef.current.target.set(-200, 25, 40);
-    cameraRef.current.lookAt(-200, 25, 40);
-    controlsRef.current.update();
-  };
+    smoothTransitionTo(new THREE.Vector3(-540, 160, -380), new THREE.Vector3(-200, 25, 40), 1000);
+    setActivePreset('depth');
+  }, [smoothTransitionTo]);
 
-  const resetNorth = () => {
+  // Looking east, square-on to the east-west cut, so the filled section reads like a survey profile
+  const setSectionView = useCallback(() => {
+    const cut = sectionCutRef.current ?? 0;
+    smoothTransitionTo(new THREE.Vector3(cut - 1250, 330, 60), new THREE.Vector3(cut, 40, 0), 1000);
+    setActivePreset('side');
+  }, [smoothTransitionTo]);
+
+  const resetNorth = useCallback(() => {
+    smoothTransitionTo(HOME_CAMERA_POSITION.clone(), HOME_CAMERA_TARGET.clone(), 1000);
+    setActivePreset('perspective');
+  }, [smoothTransitionTo]);
+
+  const zoomIn = useCallback(() => {
     if (!cameraRef.current || !controlsRef.current) return;
-    cameraRef.current.position.set(-680, 420, 680);
-    controlsRef.current.target.set(-80, 32, -20);
-    cameraRef.current.lookAt(-80, 32, -20);
-    controlsRef.current.update();
-  };
+    const cam = cameraRef.current;
+    const tgt = controlsRef.current.target;
+    const dir = new THREE.Vector3().subVectors(tgt, cam.position).normalize();
+    const dist = cam.position.distanceTo(tgt);
+    const newPos = cam.position.clone().addScaledVector(dir, Math.min(dist * 0.3, 400));
+    smoothTransitionTo(newPos, tgt.clone(), 350);
+  }, [smoothTransitionTo]);
+
+  const zoomOut = useCallback(() => {
+    if (!cameraRef.current || !controlsRef.current) return;
+    const cam = cameraRef.current;
+    const tgt = controlsRef.current.target;
+    const dir = new THREE.Vector3().subVectors(cam.position, tgt).normalize();
+    const dist = cam.position.distanceTo(tgt);
+    const newPos = cam.position.clone().addScaledVector(dir, Math.min(dist * 0.4, 600));
+    smoothTransitionTo(newPos, tgt.clone(), 350);
+  }, [smoothTransitionTo]);
+
+  const zoomFit = useCallback(() => {
+    setPerspectiveView();
+  }, [setPerspectiveView]);
+
+  // Handle external view preset triggers from toolbar
+  useEffect(() => {
+    if (!viewPresetTrigger) return;
+    switch (viewPresetTrigger.preset) {
+      case 'perspective':
+        setPerspectiveView();
+        break;
+      case 'top':
+        setTopView();
+        break;
+      case 'depth':
+        setLowObliqueView();
+        break;
+      case 'side':
+        setSideView();
+        break;
+      case 'reset':
+        resetNorth();
+        break;
+      case 'section':
+        setSectionView();
+        break;
+    }
+  }, [viewPresetTrigger, setPerspectiveView, setTopView, setLowObliqueView, setSideView, resetNorth, setSectionView]);
 
   return (
     <div
@@ -637,11 +948,152 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
       onMouseMove={handleMouseMove}
       onMouseLeave={() => setHoverInfo(null)}
     >
-      {/* 3D Compass Widget */}
-      <CompassWidget rotationY={cameraRotationY} onResetNorth={resetNorth} />
+      {/* 3D Navigation Controls Stack (Compass + Zoom) */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 20,
+          right: navigationRightOffset,
+          transition: 'right 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 10,
+          zIndex: 45
+        }}
+      >
+        <CompassWidget rotationY={cameraRotationY} onResetNorth={resetNorth} />
+
+        {/* Zoom Controls */}
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            background: 'rgba(8, 14, 28, 0.90)',
+            borderRadius: 8,
+            border: '1px solid rgba(56, 189, 248, 0.25)',
+            overflow: 'hidden',
+            backdropFilter: 'blur(10px)',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.5)'
+          }}
+        >
+          <button
+            onClick={(e) => { e.stopPropagation(); zoomIn(); }}
+            title="Zoom In"
+            style={{
+              width: 36,
+              height: 32,
+              background: 'transparent',
+              border: 'none',
+              color: '#f8fafc',
+              fontSize: 16,
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderBottom: '1px solid rgba(255,255,255,0.08)'
+            }}
+          >
+            +
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); zoomOut(); }}
+            title="Zoom Out"
+            style={{
+              width: 36,
+              height: 32,
+              background: 'transparent',
+              border: 'none',
+              color: '#f8fafc',
+              fontSize: 16,
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderBottom: '1px solid rgba(255,255,255,0.08)'
+            }}
+          >
+            −
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); zoomFit(); }}
+            title="Fit Entire Reservoir to View"
+            style={{
+              width: 36,
+              height: 32,
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--accent-cyan)',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            ⛶
+          </button>
+        </div>
+      </div>
 
       {/* Dynamic Metric Scale Bar */}
       <ScaleBar cameraDistance={cameraDistance} />
+
+      {/* Live sky conditions chip (Open-Meteo current weather) */}
+      {liveWeather && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 24,
+            left: 20,
+            zIndex: 40,
+            background: 'rgba(8, 14, 28, 0.85)',
+            border: '1px solid rgba(56, 189, 248, 0.25)',
+            borderRadius: 8,
+            padding: '6px 12px',
+            fontSize: 11,
+            color: 'var(--text-secondary)',
+            backdropFilter: 'blur(12px)',
+            whiteSpace: 'nowrap',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10
+          }}
+          title={liveWeather.ok
+            ? `Live weather from Open-Meteo, updated ${liveWeather.fetchedAt.toLocaleTimeString()}`
+            : 'Weather service unreachable: sky shows the live sun position only'}
+        >
+          <Thermometer size={18} color="#fbbf24" />
+          <span style={{ fontSize: 22, fontWeight: 700, color: '#f8fafc', fontFamily: 'var(--font-mono)' }}>
+            {liveWeather.temperatureC !== null ? `${liveWeather.temperatureC.toFixed(1)}°C` : '--°C'}
+          </span>
+          <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}>
+            <strong style={{ color: '#e2e8f0' }}>{describeWeather(liveWeather.weatherCode, liveWeather.cloudCover)}</strong>
+            <span>
+              <span style={{ color: liveWeather.ok ? '#34d399' : '#fbbf24' }}>●</span>{' '}
+              {liveWeather.ok ? `Live · ${liveWeather.cloudCover}% cloud` : 'Offline'}
+            </span>
+          </span>
+          {liveWeather.ok && (
+            <span
+              style={{ display: 'flex', alignItems: 'center', gap: 6, borderLeft: '1px solid rgba(255,255,255,0.12)', paddingLeft: 10 }}
+              title={`Wind from ${compassLabel(liveWeather.windDirectionDeg)} (${Math.round(liveWeather.windDirectionDeg)}°); arrow shows where it blows, north up`}
+            >
+              <Wind size={16} color="#7dd3fc" />
+              <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}>
+                <strong style={{ color: '#e2e8f0' }}>{liveWeather.windSpeedKmh.toFixed(0)} km/h</strong>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <ArrowUp size={11} style={{ transform: `rotate(${liveWeather.windDirectionDeg + 180}deg)` }} />
+                  from {compassLabel(liveWeather.windDirectionDeg)}
+                </span>
+              </span>
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Viewport Presets Control HUD */}
       <div
@@ -650,52 +1102,57 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
           top: 20,
           left: 20,
           display: 'flex',
-          gap: 6,
+          gap: 4,
           zIndex: 40,
-          background: 'rgba(10, 18, 36, 0.85)',
-          padding: 6,
+          background: 'rgba(8, 14, 28, 0.90)',
+          padding: '4px 6px',
           borderRadius: 8,
           border: '1px solid rgba(56, 189, 248, 0.25)',
-          backdropFilter: 'blur(10px)'
+          backdropFilter: 'blur(12px)',
+          boxShadow: '0 4px 18px rgba(0,0,0,0.5)'
         }}
       >
+        {[
+          { id: 'perspective' as const, label: 'Perspective', action: setPerspectiveView, title: '3D Natural Oblique Perspective View' },
+          { id: 'top' as const, label: 'Top Plan', action: setTopView, title: 'Orthogonal Top Plan View (Checking KML Boundary)' },
+          { id: 'depth' as const, label: 'Basin Depth', action: setLowObliqueView, title: 'Low Oblique View (Inspecting Basin Depth)' },
+          { id: 'side' as const, label: 'Side Profile', action: setSideView, title: 'Side Profile View (Dam Embankment)' }
+        ].map((preset) => {
+          const isActive = activePreset === preset.id;
+          return (
+            <button
+              key={preset.id}
+              onClick={(e) => { e.stopPropagation(); preset.action(); }}
+              title={preset.title}
+              style={{
+                padding: '4px 10px',
+                fontSize: 11,
+                fontWeight: 600,
+                borderRadius: 5,
+                border: 'none',
+                background: isActive ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' : 'transparent',
+                color: isActive ? '#ffffff' : 'var(--text-secondary)',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              {preset.label}
+            </button>
+          );
+        })}
         <button
-          className="btn-secondary"
-          onClick={setPerspectiveView}
-          style={{ padding: '4px 10px', fontSize: 11 }}
-          title="3D Natural Oblique Perspective View"
-        >
-          Perspective
-        </button>
-        <button
-          className="btn-secondary"
-          onClick={setTopView}
-          style={{ padding: '4px 10px', fontSize: 11 }}
-          title="Orthogonal Top Plan View (Checking KML Boundary)"
-        >
-          Top Plan
-        </button>
-        <button
-          className="btn-secondary"
-          onClick={setLowObliqueView}
-          style={{ padding: '4px 10px', fontSize: 11 }}
-          title="Low Oblique View (Inspecting Basin Depth)"
-        >
-          Basin Depth
-        </button>
-        <button
-          className="btn-secondary"
-          onClick={setSideView}
-          style={{ padding: '4px 10px', fontSize: 11 }}
-          title="Side Profile View (Dam Embankment)"
-        >
-          Side Profile
-        </button>
-        <button
-          className="btn-secondary"
-          onClick={setPerspectiveView}
-          style={{ padding: '4px 8px', fontSize: 11, color: 'var(--accent-cyan)' }}
-          title="Reset Camera to Default Perspective"
+          onClick={(e) => { e.stopPropagation(); resetNorth(); }}
+          style={{
+            padding: '4px 8px',
+            fontSize: 11,
+            fontWeight: 600,
+            borderRadius: 5,
+            border: 'none',
+            background: 'transparent',
+            color: 'var(--accent-cyan)',
+            cursor: 'pointer'
+          }}
+          title="Reset Camera to Default Perspective and True North"
         >
           Reset
         </button>
