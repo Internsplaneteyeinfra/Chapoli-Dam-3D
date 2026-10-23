@@ -11,7 +11,7 @@ export interface LiveWeather {
   isDay: boolean;
   windSpeedKmh: number;
   windDirectionDeg: number; // meteorological: direction the wind blows FROM, clockwise from north
-  rainForecast: { minutesUntil: number; amountMm: number; probability: number } | null;
+  nextHourForecast: { minutesUntil: number; amountMm: number; probability: number; cloudCover: number; isDay: boolean } | null;
   fetchedAt: Date;
   ok: boolean; // false when the API could not be reached (sun-only fallback)
 }
@@ -35,7 +35,7 @@ const OPEN_METEO_URL = 'https://api.open-meteo.com/v1/forecast';
 export const fetchLiveWeather = async (lat: number, lon: number): Promise<LiveWeather> => {
   const url = `${OPEN_METEO_URL}?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}`
     + '&current=temperature_2m,cloud_cover,precipitation,weather_code,is_day,wind_speed_10m,wind_direction_10m'
-    + '&hourly=precipitation,precipitation_probability&forecast_hours=24&timezone=auto';
+    + '&hourly=precipitation,precipitation_probability,cloud_cover,is_day&forecast_hours=24&timezone=auto';
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Open-Meteo ${res.status}`);
@@ -49,16 +49,20 @@ export const fetchLiveWeather = async (lat: number, lon: number): Promise<LiveWe
     const forecastTimes: string[] = Array.isArray(hourly.time) ? hourly.time : [];
     const forecastAmounts: number[] = Array.isArray(hourly.precipitation) ? hourly.precipitation : [];
     const forecastProbabilities: number[] = Array.isArray(hourly.precipitation_probability) ? hourly.precipitation_probability : [];
-    let rainForecast: LiveWeather['rainForecast'] = null;
+    const forecastCloudCover: number[] = Array.isArray(hourly.cloud_cover) ? hourly.cloud_cover : [];
+    const forecastIsDay: number[] = Array.isArray(hourly.is_day) ? hourly.is_day : [];
+    let nextHourForecast: LiveWeather['nextHourForecast'] = null;
     for (let i = 0; i < forecastTimes.length; i++) {
       const forecastTimeMs = Date.parse(`${forecastTimes[i]}Z`) - utcOffsetSeconds * 1000;
       const amountMm = Number(forecastAmounts[i]) || 0;
       const probability = Number(forecastProbabilities[i]) || 0;
-      if (forecastTimeMs > currentTimeMs && amountMm > 0 && probability >= 20) {
-        rainForecast = {
+      if (forecastTimeMs > currentTimeMs) {
+        nextHourForecast = {
           minutesUntil: Math.max(1, Math.round((forecastTimeMs - currentTimeMs) / 60000)),
           amountMm,
-          probability
+          probability,
+          cloudCover: Number(forecastCloudCover[i]) || 0,
+          isDay: forecastIsDay[i] === 1
         };
         break;
       }
@@ -71,7 +75,7 @@ export const fetchLiveWeather = async (lat: number, lon: number): Promise<LiveWe
       isDay: cur.is_day === 1,
       windSpeedKmh: typeof cur.wind_speed_10m === 'number' ? cur.wind_speed_10m : 0,
       windDirectionDeg: typeof cur.wind_direction_10m === 'number' ? cur.wind_direction_10m : 0,
-      rainForecast,
+      nextHourForecast,
       fetchedAt: new Date(),
       ok: true
     };
@@ -79,7 +83,7 @@ export const fetchLiveWeather = async (lat: number, lon: number): Promise<LiveWe
     const sun = solarPosition(new Date(), lat, lon);
     return {
       temperatureC: null, cloudCover: 0, precipitationMm: 0, weatherCode: 0, isDay: sun.elevationDeg > 0,
-      windSpeedKmh: 0, windDirectionDeg: 0, rainForecast: null, fetchedAt: new Date(), ok: false
+      windSpeedKmh: 0, windDirectionDeg: 0, nextHourForecast: null, fetchedAt: new Date(), ok: false
     };
   }
 };
@@ -125,6 +129,18 @@ export const describeWeather = (cloudCover: number, precipitationMm: number): st
   if (cloudCover >= 40) return 'Partly cloudy';
   if (cloudCover >= 15) return 'Mostly clear';
   return 'Clear';
+};
+
+export const describeForecastSky = (cloudCover: number, isDay: boolean): string => {
+  if (!isDay) {
+    if (cloudCover >= 85) return 'Cloudy night';
+    if (cloudCover >= 40) return 'Partly cloudy night';
+    return 'Clear night';
+  }
+  if (cloudCover >= 85) return 'Overcast';
+  if (cloudCover >= 40) return 'Partly cloudy';
+  if (cloudCover >= 15) return 'Mostly sunny';
+  return 'Sunny';
 };
 
 const hex = (h: string): [number, number, number] => [

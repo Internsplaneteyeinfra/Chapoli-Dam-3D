@@ -272,15 +272,15 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
               <>
                 {/* Coordinates */}
                 {!siltVisible && <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: '#cbd5e1', whiteSpace: 'nowrap' }}>Geographic (WGS84):</span>
-                    <strong style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: '#f8fafc', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>
-                      {GeoTransform.toDMS(inspection.lat, true)}, {GeoTransform.toDMS(inspection.lon, false)}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: '#cbd5e1', whiteSpace: 'nowrap' }}>GPS Location (decimal degrees):</span>
+                    <strong style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, color: '#f8fafc', letterSpacing: 0, whiteSpace: 'nowrap' }}>
+                      {GeoTransform.toDD(inspection.lat, true)}, {GeoTransform.toDD(inspection.lon, false)}
                     </strong>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: '#cbd5e1', whiteSpace: 'nowrap' }}>Projected (UTM 43N):</span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 600, color: '#93c5fd', whiteSpace: 'nowrap' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: '#cbd5e1', whiteSpace: 'nowrap' }}>Map Grid (UTM 43N):</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, color: '#93c5fd', whiteSpace: 'nowrap' }}>
                       E {inspection.easting.toLocaleString()} m, N {inspection.northing.toLocaleString()} m
                     </span>
                   </div>

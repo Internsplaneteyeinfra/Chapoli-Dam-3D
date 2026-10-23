@@ -280,6 +280,39 @@ input[type="range"]::-webkit-slider-thumb:hover {
   animation: pulse-subtle 2.5s infinite;
 }
 
+/* Keep the weather readout in its original lower-left position. */
+.weather-chip {
+  bottom: 24px;
+  left: 20px;
+  max-width: min(760px, calc(100vw - 40px));
+  white-space: normal;
+  flex-wrap: wrap;
+}
+
+.weather-details {
+  flex: 0 1 auto;
+}
+
+.weather-next-hour {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  color: #7dd3fc;
+  font-size: 10px;
+}
+
+@media (max-width: 700px) {
+  .weather-chip {
+    bottom: clamp(100px, 20vh, 130px);
+    left: 12px;
+    max-width: calc(100vw - 24px);
+    gap: 6px 8px !important;
+    padding: 7px 9px !important;
+    font-size: 10px !important;
+  }
+}
+
 /* Tooltip styles */
 [data-tooltip] {
   position: relative;

@@ -9,8 +9,8 @@ interface PointInspectorCardProps {
 }
 
 export const PointInspectorCard: React.FC<PointInspectorCardProps> = ({ inspection, onClose }) => {
-  const latDms = GeoTransform.toDMS(inspection.lat, true);
-  const lonDms = GeoTransform.toDMS(inspection.lon, false);
+  const latDd = GeoTransform.toDD(inspection.lat, true);
+  const lonDd = GeoTransform.toDD(inspection.lon, false);
 
   return (
     <div
@@ -43,14 +43,14 @@ export const PointInspectorCard: React.FC<PointInspectorCardProps> = ({ inspecti
       {/* Coordinates */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0' }}>
-          <span style={{ color: 'var(--text-secondary)' }}>Geographic (WGS84):</span>
+          <span style={{ color: 'var(--text-secondary)' }}>GPS Location (decimal degrees):</span>
           <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: '#f8fafc' }}>
-            {latDms}, {lonDms}
+            {latDd}, {lonDd}
           </span>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0' }}>
-          <span style={{ color: 'var(--text-secondary)' }}>Projected (UTM 43N / EPSG:32643):</span>
+          <span style={{ color: 'var(--text-secondary)' }}>Map Grid (UTM 43N):</span>
           <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
             E {inspection.easting.toLocaleString()} m, N {inspection.northing.toLocaleString()} m
           </span>

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
-import { Thermometer, Wind, ArrowUp, Droplets } from 'lucide-react';
+import { Thermometer, Wind, ArrowUp, Droplets, CloudSun, CloudMoon } from 'lucide-react';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { ChapoliData, InspectionResult, DataProvenance, DtmSurfaceMode } from '../../types/reservoir';
 import { GeoTransform } from '../../utils/coordinates';
@@ -21,7 +21,7 @@ import { SectionCap } from './SectionCap';
 import { LiveSky } from './LiveSky';
 import { WeatherEffects } from './WeatherEffects';
 import {
-  fetchLiveWeather, solarPosition, skyPaletteFor, describeWeather, rainIntensityFor, LiveWeather, compassLabel
+  fetchLiveWeather, solarPosition, skyPaletteFor, describeWeather, describeForecastSky, rainIntensityFor, LiveWeather, compassLabel
 } from '../../utils/liveWeather';
 import { ScaleBar } from './ScaleBar';
 import rawVegetationData from '../../data/vegetation.json';
@@ -130,10 +130,10 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
   const skyRef = useRef<LiveSky | null>(null);
   const weatherFxRef = useRef<WeatherEffects | null>(null);
   const [liveWeather, setLiveWeather] = useState<LiveWeather | null>(null);
-  const rainForecastEta = liveWeather?.rainForecast
-    ? liveWeather.rainForecast.minutesUntil < 60
-      ? `${liveWeather.rainForecast.minutesUntil}m`
-      : `${Math.floor(liveWeather.rainForecast.minutesUntil / 60)}h${liveWeather.rainForecast.minutesUntil % 60 ? ` ${liveWeather.rainForecast.minutesUntil % 60}m` : ''}`
+  const nextHourEta = liveWeather?.nextHourForecast
+    ? liveWeather.nextHourForecast.minutesUntil < 60
+      ? `${liveWeather.nextHourForecast.minutesUntil}m`
+      : `${Math.floor(liveWeather.nextHourForecast.minutesUntil / 60)}h${liveWeather.nextHourForecast.minutesUntil % 60 ? ` ${liveWeather.nextHourForecast.minutesUntil % 60}m` : ''}`
     : null;
   const sectionCutRef = useRef<number | null>(sectionCutX);
   sectionCutRef.current = sectionCutX;
@@ -1045,10 +1045,9 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
       {/* Live sky and rain forecast chip (Open-Meteo model) */}
       {liveWeather && (
         <div
+          className="weather-chip"
           style={{
             position: 'absolute',
-            bottom: 24,
-            left: 20,
             zIndex: 40,
             background: 'rgba(8, 14, 28, 0.85)',
             border: '1px solid rgba(56, 189, 248, 0.25)',
@@ -1057,29 +1056,38 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
             fontSize: 11,
             color: 'var(--text-secondary)',
             backdropFilter: 'blur(12px)',
-            whiteSpace: 'nowrap',
             display: 'flex',
             alignItems: 'center',
             gap: 10
           }}
-          title={liveWeather.ok
-            ? `Open-Meteo model estimate, updated ${liveWeather.fetchedAt.toLocaleTimeString()}`
-            : 'Weather service unreachable: sky shows the live sun position only'}
+          title="Weather at Chapoli"
         >
           <Thermometer size={18} color="#fbbf24" />
-          <span style={{ fontSize: 22, fontWeight: 700, color: '#f8fafc', fontFamily: 'var(--font-mono)' }}>
+          <span style={{ fontSize: 25, fontWeight: 700, color: '#f8fafc', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
             {liveWeather.temperatureC !== null ? `${liveWeather.temperatureC.toFixed(1)}°C` : '--°C'}
           </span>
-          <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}>
+          <span className="weather-details" style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3, minWidth: 0 }}>
             <strong style={{ color: '#e2e8f0' }}>{describeWeather(liveWeather.cloudCover, liveWeather.precipitationMm)}</strong>
             <span>
               <span style={{ color: liveWeather.ok ? '#34d399' : '#fbbf24' }}>●</span>{' '}
               {liveWeather.ok
                 ? rainIntensityFor(liveWeather.precipitationMm) === 'none'
-                  ? `Model · ${liveWeather.cloudCover}% cloud`
+                  ? `${liveWeather.cloudCover}% cloud`
                   : `${liveWeather.precipitationMm.toFixed(1)} mm in last hour`
                 : 'Offline'}
             </span>
+            {liveWeather.ok && nextHourEta && liveWeather.nextHourForecast && (
+              <span className="weather-next-hour" title={`Next hourly forecast; precipitation probability ${liveWeather.nextHourForecast.probability}%`}>
+                {liveWeather.nextHourForecast.amountMm > 0
+                  ? <Droplets size={13} />
+                  : liveWeather.nextHourForecast.isDay ? <CloudSun size={13} /> : <CloudMoon size={13} />}
+                <span>
+                  Next hour ({nextHourEta}): {liveWeather.nextHourForecast.amountMm > 0
+                    ? `Rain · ${liveWeather.nextHourForecast.amountMm.toFixed(1)} mm (${liveWeather.nextHourForecast.probability}%)`
+                    : `${describeForecastSky(liveWeather.nextHourForecast.cloudCover, liveWeather.nextHourForecast.isDay)} · no rain`}
+                </span>
+              </span>
+            )}
           </span>
           {liveWeather.ok && (
             <span
@@ -1094,15 +1102,6 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
                   from {compassLabel(liveWeather.windDirectionDeg)}
                 </span>
               </span>
-            </span>
-          )}
-          {liveWeather.ok && rainForecastEta && liveWeather.rainForecast && rainIntensityFor(liveWeather.precipitationMm) === 'none' && (
-            <span
-              style={{ display: 'flex', alignItems: 'center', gap: 5, borderLeft: '1px solid rgba(255,255,255,0.12)', paddingLeft: 10, color: '#7dd3fc' }}
-              title={`Forecast precipitation probability ${liveWeather.rainForecast.probability}% for that hour`}
-            >
-              <Droplets size={15} />
-              <span>Rain in {rainForecastEta} · {liveWeather.rainForecast.amountMm.toFixed(1)} mm ({liveWeather.rainForecast.probability}%)</span>
             </span>
           )}
         </div>

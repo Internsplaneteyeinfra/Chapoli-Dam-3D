@@ -67,4 +67,10 @@ export class GeoTransform {
     const dir = isLat ? (val >= 0 ? 'N' : 'S') : (val >= 0 ? 'E' : 'W');
     return `${deg}°${min}'${sec}" ${dir}`;
   }
+
+  /** Format a geographic coordinate as decimal degrees with its hemisphere. */
+  static toDD(val: number, isLat: boolean): string {
+    const dir = isLat ? (val >= 0 ? 'N' : 'S') : (val >= 0 ? 'E' : 'W');
+    return `${Math.abs(val).toFixed(6)}° ${dir}`;
+  }
 }
