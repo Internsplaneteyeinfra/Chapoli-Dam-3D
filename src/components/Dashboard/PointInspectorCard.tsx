@@ -92,7 +92,7 @@ export const PointInspectorCard: React.FC<PointInspectorCardProps> = ({ inspecti
         <div style={{ background: 'rgba(15, 23, 42, 0.7)', borderRadius: 8, padding: 10, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ color: 'var(--text-secondary)' }}>
-              {inspection.waterDepth && inspection.waterDepth > 0 ? 'Reservoir Bed Elevation:' : 'Ground Surface Elevation:'}
+              {inspection.waterDepth && inspection.waterDepth > 0 ? 'DTM Bed Elevation:' : 'Ground Surface Elevation:'}
             </span>
             <strong style={{ fontFamily: 'var(--font-mono)', color: inspection.elevation !== null ? 'var(--accent-cyan)' : '#f43f5e' }}>
               {inspection.elevation !== null ? `${inspection.elevation.toFixed(2)} m MSL` : 'NoData / Void'}
@@ -107,7 +107,14 @@ export const PointInspectorCard: React.FC<PointInspectorCardProps> = ({ inspecti
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ color: 'var(--text-secondary)' }}>Water Column Depth:</span>
+            <span
+              title={inspection.waterDepthSource === 'satellite-relative'
+                ? 'Updated Sentinel-2 relative depth estimate at this point'
+                : 'Operating water level minus the inspected bed elevation'}
+              style={{ color: 'var(--text-secondary)' }}
+            >
+              {inspection.waterDepthSource === 'satellite-relative' ? 'Satellite Relative Depth:' : 'Water Column Depth:'}
+            </span>
             <strong style={{ fontFamily: 'var(--font-mono)', color: inspection.waterDepth !== null && inspection.waterDepth > 0 ? '#38bdf8' : 'var(--text-muted)' }}>
               {inspection.waterDepth !== null && inspection.waterDepth > 0 ? `${inspection.waterDepth.toFixed(2)} m` : '0.00 m (Above Waterline)'}
             </strong>

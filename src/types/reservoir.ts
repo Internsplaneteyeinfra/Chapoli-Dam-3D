@@ -196,6 +196,7 @@ export interface InspectionResult {
   elevation: number | null;
   waterLevel: number;
   waterDepth: number | null;
+  waterDepthSource?: 'satellite-relative' | 'level-to-bed';
   originalBedElev: number | null;
   sedimentThickness: number | null;
   inTank: boolean;
@@ -203,7 +204,10 @@ export interface InspectionResult {
   qualityNote: string;
   siltClass?: string;
   siltClassColor?: string;
+  siltTextureU?: number;
+  siltTextureV?: number;
   siltVolumeScore?: number;
+  siltVolumeM3?: number;
   siltThicknessM?: number;
   siltMonthName?: string;
 }

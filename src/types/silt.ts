@@ -50,6 +50,11 @@ export interface SiltMonthRecord {
     veryHigh: SiltClassStat;
   };
   classificationDataUrl: string;
+  classificationPixelGrid?: {
+    width: number;
+    height: number;
+    values: string;
+  };
   volumeDataUrl: string;
   gridDimensions: {
     width: number;

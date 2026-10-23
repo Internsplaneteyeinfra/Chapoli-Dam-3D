@@ -252,7 +252,6 @@ export const RightVerticalToolbar: React.FC<RightVerticalToolbarProps> = ({
               specs={specs}
               liveTelemetry={liveTelemetry}
               waterDepthData={waterDepthData}
-              siltRecord={currentSiltRecord}
             />
           )}
 

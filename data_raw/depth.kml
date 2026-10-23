@@ -2,7 +2,7 @@
 <ns0:kml xmlns:ns0="http://www.opengis.net/kml/2.2">
   <ns0:Document>
     <ns0:name>Water Depth - 2026-10-20</ns0:name>
-    <ns0:description>Sentinel-2 relative depth. Image date: 2026-10-20. Analysis date: 2026-10-22. Water area: 62.31484064849474 ha. Depth range: 6.5-20.0 m. Depth is a relative band-ratio estimate and is not survey-grade bathymetry.</ns0:description>
+    <ns0:description>Sentinel-2 relative depth. Image date: 2026-10-20. Analysis date: 2026-10-22. Water area: 62.31484064849474 ha. Depth range: 6.5-23.25 m. Depth is a relative band-ratio estimate and is not survey-grade bathymetry.</ns0:description>
     <ns0:GroundOverlay>
       <ns0:name>Water Depth - Green to Red</ns0:name>
       <ns0:color>ccffffff</ns0:color>

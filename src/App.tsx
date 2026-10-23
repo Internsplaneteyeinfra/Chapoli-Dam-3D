@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+﻿import React, { useState, useMemo, useEffect } from 'react';
 import rawData from './data/chapoli_data.json';
 import rawSiltData from './data/silt_series.json';
 import rawWaterDepthData from './data/water_depth.json';
@@ -8,7 +8,7 @@ import { ChapoliData, InspectionResult, ImportedSurvey, DtmSurfaceMode } from '.
 import { SiltSeriesPayload, SiltVisualMode } from './types/silt';
 import { SedimentAnalysisEngine } from './utils/sedimentAnalysis';
 import { ReservoirCanvas } from './components/Scene3D/ReservoirCanvas';
-import { FileDown } from 'lucide-react';
+import { FileDown, Waves } from 'lucide-react';
 import { ReservoirOverviewAndInspectorPanel } from './components/Dashboard/ReservoirOverviewAndInspectorPanel';
 import { RightVerticalToolbar, RightToolbarTab } from './components/Dashboard/RightVerticalToolbar';
 import { SiltTimelineControl } from './components/Dashboard/SiltTimelineControl';
@@ -88,6 +88,16 @@ export const App: React.FC = () => {
   const [isVolumeModalOpen, setIsVolumeModalOpen] = useState<boolean>(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
+  const [isDepthBathymetryOpen, setIsDepthBathymetryOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleBathymetryMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'chapoli:close-bathymetry') setIsDepthBathymetryOpen(false);
+    };
+    window.addEventListener('message', handleBathymetryMessage);
+    return () => window.removeEventListener('message', handleBathymetryMessage);
+  }, []);
 
   // Registered Bathymetric Surveys
   const [surveys, setSurveys] = useState<ImportedSurvey[]>([
@@ -125,48 +135,78 @@ export const App: React.FC = () => {
     setActiveSurveyId(newSurvey.id);
   };
 
-  // Dynamically update inspected point Sentinel-2 silt values when timeline month changes
+  // Keep the selected point in sync with the active silt month.
   useEffect(() => {
     if (!inspectedPoint || !siltData) return;
     const monthRecord = siltData.months[siltMonth] || siltData.months[siltData.activeDefaultMonth];
     if (!monthRecord) return;
     const bbox = siltData.bbox.local;
     const { x: localX, z: localZ } = inspectedPoint;
+    let classVal = 0;
+    let thickVal = 0;
     if (localX >= bbox.minX && localX <= bbox.maxX && localZ >= bbox.minZ && localZ <= bbox.maxZ) {
-      const u = (localX - bbox.minX) / bbox.width;
-      const v = (localZ - bbox.minZ) / bbox.depth;
-      const col = Math.min(monthRecord.gridDimensions.width - 1, Math.max(0, Math.floor(u * monthRecord.gridDimensions.width)));
-      const row = Math.min(monthRecord.gridDimensions.height - 1, Math.max(0, Math.floor(v * monthRecord.gridDimensions.height)));
-      const classVal = monthRecord.classGrid[row]?.[col] ?? 0;
-      const thickVal = monthRecord.thicknessGrid[row]?.[col] ?? 0;
-      const classMap: Record<number, { name: 'Low' | 'Moderate' | 'High' | 'Very High'; color: string }> = {
-        1: { name: 'Low', color: '#22c55e' },
-        2: { name: 'Moderate', color: '#eab308' },
-        3: { name: 'High', color: '#f97316' },
-        4: { name: 'Very High', color: '#ef4444' }
-      };
-      if (classVal > 0) {
-        const siltClass = classMap[classVal]?.name;
-        const siltClassColor = classMap[classVal]?.color;
-        const siltVolumeScore = Math.round(thickVal * 100 * 100) / 100;
-        const siltThicknessM = Math.round(thickVal * 100) / 100;
-        setInspectedPoint(prev => prev ? ({
-          ...prev,
-          siltClass,
-          siltClassColor,
-          siltVolumeScore,
-          siltThicknessM,
-          siltMonthName: monthRecord.name,
-          sedimentThickness: siltVisible ? siltThicknessM : null,
-          provenance: 'OBSERVED',
-          qualityNote: `Observed Sentinel-2 Silt (${monthRecord.name}): ${siltClass} Class, ${siltVolumeScore.toFixed(1)} m³/100m² pixel volume score`
-        }) : null);
+      const u = inspectedPoint.siltTextureU ?? (localX - bbox.minX) / bbox.width;
+      const v = inspectedPoint.siltTextureV ?? (localZ - bbox.minZ) / bbox.depth;
+      const raster = monthRecord.classificationPixelGrid;
+      if (raster) {
+        const col = Math.min(raster.width - 1, Math.max(0, Math.floor(u * raster.width)));
+        const row = Math.min(raster.height - 1, Math.max(0, Math.floor(v * raster.height)));
+        classVal = Number(raster.values[row * raster.width + col]) || 0;
+      } else {
+        const col = Math.min(monthRecord.gridDimensions.width - 1, Math.max(0, Math.floor(u * monthRecord.gridDimensions.width)));
+        const row = Math.min(monthRecord.gridDimensions.height - 1, Math.max(0, Math.floor(v * monthRecord.gridDimensions.height)));
+        classVal = monthRecord.classGrid[row]?.[col] ?? 0;
       }
+      const scoreCol = Math.min(monthRecord.gridDimensions.width - 1, Math.max(0, Math.floor(((localX - bbox.minX) / bbox.width) * monthRecord.gridDimensions.width)));
+      const scoreRow = Math.min(monthRecord.gridDimensions.height - 1, Math.max(0, Math.floor(((localZ - bbox.minZ) / bbox.depth) * monthRecord.gridDimensions.height)));
+      thickVal = monthRecord.thicknessGrid[scoreRow]?.[scoreCol] ?? 0;
     }
-  }, [siltMonth, siltData, siltVisible]);
+    const classMap: Record<number, { name: 'Low' | 'Moderate' | 'High' | 'Very High'; color: string }> = {
+      1: { name: 'Low', color: '#22c55e' },
+      2: { name: 'Moderate', color: '#eab308' },
+      3: { name: 'High', color: '#f97316' },
+      4: { name: 'Very High', color: '#ef4444' }
+    };
+    const classInfo = classMap[classVal];
+    const thicknessM = classInfo ? Math.round(thickVal * 100) / 100 : undefined;
+    const volumeScore = classInfo ? Math.round(thickVal * 100 * 100) / 100 : undefined;
+    const pixelAreaM2 = (bbox.width / monthRecord.gridDimensions.width) * (bbox.depth / monthRecord.gridDimensions.height);
+    setInspectedPoint(prev => prev ? ({
+      ...prev,
+      siltClass: classInfo?.name,
+      siltClassColor: classInfo?.color,
+      siltVolumeScore: volumeScore,
+      siltVolumeM3: thicknessM === undefined ? undefined : Math.round(thicknessM * pixelAreaM2 * 100) / 100,
+      siltThicknessM: thicknessM,
+      siltMonthName: monthRecord.name,
+      sedimentThickness: siltVisible ? thicknessM ?? null : null,
+      provenance: 'OBSERVED',
+      qualityNote: classInfo
+        ? `Observed silt classification: ${classInfo.name}`
+        : `No silt classification at this point for ${monthRecord.name}`
+    }) : null);
+  }, [siltMonth, siltData, siltVisible, inspectedPoint?.x, inspectedPoint?.z, inspectedPoint?.siltTextureU, inspectedPoint?.siltTextureV]);
 
   return (
     <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {isDepthBathymetryOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 2000,
+            background: '#0b1620',
+            animation: 'depthBathymetryEnter 220ms cubic-bezier(0.2, 0.75, 0.25, 1) both'
+          }}
+        >
+          <style>{'@keyframes depthBathymetryEnter { from { opacity: 0; transform: translateY(8px) scale(0.995); } to { opacity: 1; transform: translateY(0) scale(1); } }'}</style>
+          <iframe
+            title="Chapoli Depth Bathymetry"
+            src="/depth-bathymetry.html"
+            style={{ width: '100%', height: '100%', border: 0, display: 'block' }}
+          />
+        </div>
+      )}
       {/* Main Workspace: 3D Viewport + Engineering Sidebars */}
       <div style={{ flex: 1, position: 'relative', display: 'flex', overflow: 'hidden' }}>
         {/* Three.js Interactive 3D Canvas */}
@@ -281,12 +321,13 @@ export const App: React.FC = () => {
             submergedAreaHa={waterStorage.areaHa}
             submergedVolumeMCM={waterStorage.volumeMCM}
             liveTelemetry={data.live_telemetry}
-            activeTool={activeTool}
-            onSelectTool={setActiveTool}
             onOpenDamProfile={() => setIsDamProfileOpen(true)}
             onOpenCrossSection={() => setIsCrossSectionOpen(true)}
             siltVisible={siltVisible}
             siltMonthName={siltData.months[siltMonth]?.name || 'September'}
+            siltRecord={siltData.months[siltMonth] || siltData.months[siltData.activeDefaultMonth]}
+            siltVolumeLegend={siltData.volumeLegend}
+            siltVisualMode={siltVisualMode}
           />
 
           {/* Tool Active Instruction Banner */}
@@ -312,7 +353,7 @@ export const App: React.FC = () => {
             </div>
           )}
 
-          {/* Floating Top-Right Export Action Button (Single prominent action remaining from header) */}
+          {/* Floating top-right actions */}
           <div
             style={{
               position: 'absolute',
@@ -320,9 +361,37 @@ export const App: React.FC = () => {
               right: (activeRightTab ? 450 : 70) + 54,
               transition: 'right 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
               zIndex: 45,
-              pointerEvents: 'auto'
+              pointerEvents: 'auto',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8
             }}
           >
+            <button
+              onClick={() => setIsDepthBathymetryOpen(true)}
+              title="Open the depth bathymetry viewer"
+              style={{
+                height: 38,
+                padding: '0 13px',
+                fontSize: 12,
+                fontWeight: 600,
+                borderRadius: 8,
+                border: '1px solid rgba(56, 189, 248, 0.4)',
+                background: 'rgba(8, 14, 28, 0.88)',
+                color: '#e0f2fe',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 7,
+                cursor: 'pointer',
+                backdropFilter: 'blur(12px)',
+                boxShadow: '0 4px 18px rgba(0, 0, 0, 0.45)',
+                whiteSpace: 'nowrap'
+              }}
+              className="hover:brightness-110 active:scale-95"
+            >
+              <Waves size={15} />
+              <span>Depth Bathymetry</span>
+            </button>
             <button
               onClick={() => setIsExportModalOpen(true)}
               title="Export Digital Twin Report, GeoJSON, CSV & Bathymetry Data"

@@ -1,14 +1,12 @@
 import React from 'react';
-import { Database, Droplets, Layers } from 'lucide-react';
+import { Database, Droplets } from 'lucide-react';
 import { BaselineSpecs, LiveTelemetry } from '../../types/reservoir';
 import { WaterDepthPayload } from '../../types/waterDepth';
-import { SiltMonthRecord } from '../../types/silt';
 
 interface SpecsPanelProps {
   specs: BaselineSpecs;
   liveTelemetry?: LiveTelemetry;
   waterDepthData?: WaterDepthPayload;
-  siltRecord?: SiltMonthRecord;
 }
 
 const Row: React.FC<{ label: string; value: string; color?: string }> = ({ label, value, color = '#f8fafc' }) => (
@@ -28,13 +26,11 @@ const Section: React.FC<{ icon: React.ReactNode; title: string; children: React.
   </div>
 );
 
-/** Key facts only: dam depth, current water and the selected month's silt. */
-export const SpecsPanel: React.FC<SpecsPanelProps> = ({ specs, liveTelemetry, waterDepthData, siltRecord }) => {
+/** Key facts only: dam depth and current water conditions. */
+export const SpecsPanel: React.FC<SpecsPanelProps> = ({ specs, liveTelemetry, waterDepthData }) => {
   const deepestBed = specs.deepestBedLevel_m ?? 15.5;
   const topOfDam = specs.topOfDam_m ?? 41.0;
   const liveLevel = liveTelemetry?.reportedLevel_m;
-  const bd = siltRecord?.classificationBreakdown;
-  const classes = bd ? [bd.low, bd.moderate, bd.high, bd.veryHigh] : [];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -63,25 +59,6 @@ export const SpecsPanel: React.FC<SpecsPanelProps> = ({ specs, liveTelemetry, wa
           </>
         )}
       </Section>
-
-      {siltRecord && (
-        <Section icon={<Layers size={14} color="#f59e0b" />} title={`Silt · ${siltRecord.dateLabel}`}>
-          <Row label="Relative silt volume" value={`${siltRecord.totalSiltVolumeM3.toLocaleString()} m³`} color="#fbbf24" />
-          <Row label="Mean silt score" value={siltRecord.meanSiltScore.toFixed(3)} />
-          <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', margin: '8px 0 6px', background: '#1e293b' }}>
-            {classes.map(c => <div key={c.label} style={{ width: `${c.percent}%`, background: c.color }} />)}
-          </div>
-          {classes.map(c => (
-            <div key={c.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '1px 0' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
-                <span style={{ width: 8, height: 8, borderRadius: 2, background: c.color }} />
-                {c.label}
-              </span>
-              <span style={{ fontFamily: 'var(--font-mono)', color: '#e2e8f0' }}>{c.percent}%</span>
-            </div>
-          ))}
-        </Section>
-      )}
     </div>
   );
 };

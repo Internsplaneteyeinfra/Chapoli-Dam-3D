@@ -217,6 +217,11 @@ def main():
                 'veryHigh': {'count': counts[3], 'percent': pcts[3], 'color': '#ef4444', 'label': 'Very High Silt'}
             },
             'classificationDataUrl': 'data:image/png;base64,' + base64.b64encode(png_c).decode('ascii'),
+            'classificationPixelGrid': {
+                'width': int(classes.shape[1]),
+                'height': int(classes.shape[0]),
+                'values': ''.join(map(str, classes.astype(int).ravel()))
+            },
             'volumeDataUrl': 'data:image/png;base64,' + base64.b64encode(png_v).decode('ascii'),
             'gridDimensions': {'width': grid_w, 'height': grid_h},
             'classGrid': class_grid.astype(int).tolist(),

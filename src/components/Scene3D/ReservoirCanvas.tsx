@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
-import { Thermometer, Wind, ArrowUp } from 'lucide-react';
+import { Thermometer, Wind, ArrowUp, Droplets } from 'lucide-react';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { ChapoliData, InspectionResult, DataProvenance, DtmSurfaceMode } from '../../types/reservoir';
 import { GeoTransform } from '../../utils/coordinates';
@@ -21,7 +21,7 @@ import { SectionCap } from './SectionCap';
 import { LiveSky } from './LiveSky';
 import { WeatherEffects } from './WeatherEffects';
 import {
-  fetchLiveWeather, solarPosition, skyPaletteFor, describeWeather, LiveWeather, applyWeatherOverride, compassLabel
+  fetchLiveWeather, solarPosition, skyPaletteFor, describeWeather, rainIntensityFor, LiveWeather, compassLabel
 } from '../../utils/liveWeather';
 import { ScaleBar } from './ScaleBar';
 import rawVegetationData from '../../data/vegetation.json';
@@ -130,6 +130,11 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
   const skyRef = useRef<LiveSky | null>(null);
   const weatherFxRef = useRef<WeatherEffects | null>(null);
   const [liveWeather, setLiveWeather] = useState<LiveWeather | null>(null);
+  const rainForecastEta = liveWeather?.rainForecast
+    ? liveWeather.rainForecast.minutesUntil < 60
+      ? `${liveWeather.rainForecast.minutesUntil}m`
+      : `${Math.floor(liveWeather.rainForecast.minutesUntil / 60)}h${liveWeather.rainForecast.minutesUntil % 60 ? ` ${liveWeather.rainForecast.minutesUntil % 60}m` : ''}`
+    : null;
   const sectionCutRef = useRef<number | null>(sectionCutX);
   sectionCutRef.current = sectionCutX;
   const markerRef = useRef<InspectionMarker | null>(null);
@@ -519,7 +524,7 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
       (sceneRef.current.fog as THREE.FogExp2).color.copy(horizon);
     };
     const refresh = async () => {
-      const w = applyWeatherOverride(await fetchLiveWeather(lat, lon));
+      const w = await fetchLiveWeather(lat, lon);
       if (cancelled) return;
       weather = w;
       setLiveWeather(w);
@@ -627,48 +632,19 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
 
     // Intersect with terrain, water surface, dam structure, or silt layer
     const intersects = raycaster.intersectObjects(sceneRef.current.children, true);
-    const validHit = intersects.find(isPickable);
+    const validHit = siltVisible
+      ? intersects.find(hit => hit.object.userData?.isSiltLayer) || intersects.find(isPickable)
+      : intersects.find(isPickable);
 
     if (validHit) {
       const hitPt = validHit.point;
       const localX = hitPt.x;
       const localZ = hitPt.z;
 
-      // Check if user clicked directly on the Earthen Dam Embankment structure
-      if (validHit.object.userData?.isDam) {
-        const [easting, northing] = geoRef.current.localToUTM(localX, localZ);
-        const [lon, lat] = geoRef.current.localToWGS84(localX, localZ);
-        const isCrest = validHit.object.userData?.component === 'crest';
-        const damElev = isCrest ? 41.00 : hitPt.y / verticalExaggeration;
-
-        markerRef.current?.setPosition(
-          localX,
-          hitPt.y,
-          localZ,
-          null,
-          verticalExaggeration
-        );
-
-        const inspection: InspectionResult = {
-          x: localX,
-          z: localZ,
-          easting: Math.round(easting * 10) / 10,
-          northing: Math.round(northing * 10) / 10,
-          lon: Number(lon.toFixed(6)),
-          lat: Number(lat.toFixed(6)),
-          elevation: Math.round(damElev * 100) / 100,
-          waterLevel,
-          waterDepth: 0,
-          originalBedElev: 15.50, // Reference to deepest bed foundation
-          sedimentThickness: null,
-          inTank: false,
-          provenance: 'OBSERVED',
-          qualityNote: `Official Goa WRD Earthen Dam: Top of Dam El. 41.00m, Crest Length 760m, Dam Height 25.50m above deepest bed (El. 15.50m). ${isCrest ? 'Station on Crest Roadway.' : 'Station on Embankment Slope.'}`
-        };
-
-        onPointInspected(inspection);
-        return;
-      }
+      // Preserve the actual clicked surface elevation for dam geometry while
+      // continuing through the same coordinate-based inspection pipeline.
+      const clickedDam = Boolean(validHit.object.userData?.isDam);
+      const clickedSurfaceElevation = hitPt.y / verticalExaggeration;
 
       // Handle Transect Drawing tool
       if (activeTool === 'transect') {
@@ -705,6 +681,8 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
       // Sentinel-2 Silt Classification & Volume sampling
       let siltClass: 'Low' | 'Moderate' | 'High' | 'Very High' | undefined = undefined;
       let siltClassColor: string | undefined = undefined;
+      let siltTextureU: number | undefined = undefined;
+      let siltTextureV: number | undefined = undefined;
       let siltVolumeScore: number | undefined = undefined;
       let siltThicknessM: number | undefined = undefined;
       let siltMonthName: string | undefined = undefined;
@@ -716,9 +694,18 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
         if (localX >= bbox.minX && localX <= bbox.maxX && localZ >= bbox.minZ && localZ <= bbox.maxZ) {
           const u = (localX - bbox.minX) / bbox.width;
           const v = (localZ - bbox.minZ) / bbox.depth;
+          const hitUv = validHit.object.userData?.isSiltLayer ? validHit.uv : undefined;
+          const textureU = hitUv ? hitUv.x : u;
+          const textureV = hitUv ? 1 - hitUv.y : v;
+          siltTextureU = textureU;
+          siltTextureV = textureV;
           const col = Math.min(monthRecord.gridDimensions.width - 1, Math.max(0, Math.floor(u * monthRecord.gridDimensions.width)));
           const row = Math.min(monthRecord.gridDimensions.height - 1, Math.max(0, Math.floor(v * monthRecord.gridDimensions.height)));
-          const classVal = monthRecord.classGrid[row]?.[col] ?? 0;
+          const raster = monthRecord.classificationPixelGrid;
+          const pixelCol = raster ? Math.min(raster.width - 1, Math.max(0, Math.floor(textureU * raster.width))) : col;
+          const pixelRow = raster ? Math.min(raster.height - 1, Math.max(0, Math.floor(textureV * raster.height))) : row;
+          const pixelClass = raster ? Number(raster.values[pixelRow * raster.width + pixelCol]) : undefined;
+          const classVal = pixelClass ?? monthRecord.classGrid[row]?.[col] ?? 0;
           const thickVal = monthRecord.thicknessGrid[row]?.[col] ?? 0;
 
           if (classVal > 0) {
@@ -736,7 +723,9 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
         }
       }
 
-      const satelliteDepth = validHit.object.userData?.isPermanentWater && waterDepthData
+      // Sample the updated raster by location, regardless of which overlapping 3D
+      // surface won the raycast (terrain, carved bed, or permanent-water mesh).
+      const satelliteDepth = waterDepthData
         ? sampleWaterDepth(waterDepthData, localX, localZ)
         : null;
 
@@ -766,7 +755,7 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
       // Update 3D Marker: only draw vertical caliper if submerged with sediment thickness and silt is ON
       markerRef.current?.setPosition(
         localX,
-        (presBedElev ?? 34) * verticalExaggeration,
+        (clickedDam || validHit.object.userData?.isSiltLayer ? hitPt.y / verticalExaggeration : presBedElev ?? 34) * verticalExaggeration,
         localZ,
         isSubmerged && sedimentThickness !== null && siltVisible ? origBedElev : null,
         verticalExaggeration
@@ -779,9 +768,10 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
         northing: Math.round(northing * 10) / 10,
         lon: Number(lon.toFixed(6)),
         lat: Number(lat.toFixed(6)),
-        elevation: presBedElev,
+        elevation: clickedDam ? Math.round(clickedSurfaceElevation * 100) / 100 : presBedElev,
         waterLevel,
         waterDepth: satelliteDepth !== null ? Math.round(satelliteDepth * 100) / 100 : waterDepth,
+        waterDepthSource: satelliteDepth !== null ? 'satellite-relative' : 'level-to-bed',
         originalBedElev: isSubmerged ? origBedElev : null,
         sedimentThickness,
         inTank,
@@ -789,7 +779,12 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
         qualityNote,
         siltClass,
         siltClassColor,
+        siltTextureU,
+        siltTextureV,
         siltVolumeScore,
+        siltVolumeM3: siltThicknessM !== undefined && siltData
+          ? Math.round(siltThicknessM * (siltData.bbox.local.width / (siltData.months[siltMonth] || siltData.months[siltData.activeDefaultMonth]).gridDimensions.width) * (siltData.bbox.local.depth / (siltData.months[siltMonth] || siltData.months[siltData.activeDefaultMonth]).gridDimensions.height) * 100) / 100
+          : undefined,
         siltThicknessM,
         siltMonthName
       };
@@ -1047,7 +1042,7 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
       {/* Dynamic Metric Scale Bar */}
       <ScaleBar cameraDistance={cameraDistance} />
 
-      {/* Live sky conditions chip (Open-Meteo current weather) */}
+      {/* Live sky and rain forecast chip (Open-Meteo model) */}
       {liveWeather && (
         <div
           style={{
@@ -1068,7 +1063,7 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
             gap: 10
           }}
           title={liveWeather.ok
-            ? `Live weather from Open-Meteo, updated ${liveWeather.fetchedAt.toLocaleTimeString()}`
+            ? `Open-Meteo model estimate, updated ${liveWeather.fetchedAt.toLocaleTimeString()}`
             : 'Weather service unreachable: sky shows the live sun position only'}
         >
           <Thermometer size={18} color="#fbbf24" />
@@ -1076,10 +1071,14 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
             {liveWeather.temperatureC !== null ? `${liveWeather.temperatureC.toFixed(1)}°C` : '--°C'}
           </span>
           <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.3 }}>
-            <strong style={{ color: '#e2e8f0' }}>{describeWeather(liveWeather.weatherCode, liveWeather.cloudCover)}</strong>
+            <strong style={{ color: '#e2e8f0' }}>{describeWeather(liveWeather.cloudCover, liveWeather.precipitationMm)}</strong>
             <span>
               <span style={{ color: liveWeather.ok ? '#34d399' : '#fbbf24' }}>●</span>{' '}
-              {liveWeather.ok ? `Live · ${liveWeather.cloudCover}% cloud` : 'Offline'}
+              {liveWeather.ok
+                ? rainIntensityFor(liveWeather.precipitationMm) === 'none'
+                  ? `Model · ${liveWeather.cloudCover}% cloud`
+                  : `${liveWeather.precipitationMm.toFixed(1)} mm in last hour`
+                : 'Offline'}
             </span>
           </span>
           {liveWeather.ok && (
@@ -1095,6 +1094,15 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
                   from {compassLabel(liveWeather.windDirectionDeg)}
                 </span>
               </span>
+            </span>
+          )}
+          {liveWeather.ok && rainForecastEta && liveWeather.rainForecast && rainIntensityFor(liveWeather.precipitationMm) === 'none' && (
+            <span
+              style={{ display: 'flex', alignItems: 'center', gap: 5, borderLeft: '1px solid rgba(255,255,255,0.12)', paddingLeft: 10, color: '#7dd3fc' }}
+              title={`Forecast precipitation probability ${liveWeather.rainForecast.probability}% for that hour`}
+            >
+              <Droplets size={15} />
+              <span>Rain in {rainForecastEta} · {liveWeather.rainForecast.amountMm.toFixed(1)} mm ({liveWeather.rainForecast.probability}%)</span>
             </span>
           )}
         </div>

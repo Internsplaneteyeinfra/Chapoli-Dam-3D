@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { MapPin, X, ChevronDown, ChevronUp, Layers, Database, Radio, Activity, Sparkles } from 'lucide-react';
+﻿import React, { useState } from 'react';
+import { MapPin, X, ChevronDown, ChevronUp, Layers, Database, Radio } from 'lucide-react';
 import { InspectionResult, BaselineSpecs, LiveTelemetry } from '../../types/reservoir';
+import { SiltMonthRecord, SiltSeriesPayload, SiltVisualMode } from '../../types/silt';
 import { GeoTransform } from '../../utils/coordinates';
 
 interface ReservoirOverviewAndInspectorPanelProps {
@@ -11,13 +12,104 @@ interface ReservoirOverviewAndInspectorPanelProps {
   submergedAreaHa: number;
   submergedVolumeMCM: number;
   liveTelemetry?: LiveTelemetry;
-  activeTool: 'inspect' | 'transect' | 'measure' | null;
-  onSelectTool: (tool: 'inspect' | 'transect' | 'measure' | null) => void;
   onOpenDamProfile?: () => void;
   onOpenCrossSection?: () => void;
   siltVisible?: boolean;
   siltMonthName?: string;
+  siltRecord?: SiltMonthRecord;
+  siltVolumeLegend?: SiltSeriesPayload['volumeLegend'];
+  siltVisualMode?: SiltVisualMode;
 }
+
+const SiltVolumeLegend: React.FC<{
+  record: SiltMonthRecord;
+  volumeLegend: SiltSeriesPayload['volumeLegend'];
+  pointValue?: number;
+  pointClass?: string;
+  visualMode: SiltVisualMode;
+}> = ({ record, volumeLegend, pointValue, pointClass, visualMode }) => {
+  const palette = volumeLegend.palette;
+  const min = volumeLegend.minVal;
+  const max = volumeLegend.maxVal;
+  const stops = Array.from({ length: 5 }, (_, index) => {
+    const t = index / 4;
+    const colorIndex = Math.round(t * (palette.length - 1));
+    return {
+      t,
+      color: palette[colorIndex] || '#f59e0b',
+      value: min + (max - min) * t
+    };
+  });
+  const activeStop = pointValue === undefined || max <= min
+    ? -1
+    : Math.round(Math.max(0, Math.min(1, (pointValue - min) / (max - min))) * 4);
+  const breakdown = record.classificationBreakdown;
+  const classes = [
+    { key: 'low', label: 'Low', stat: breakdown.low },
+    { key: 'moderate', label: 'Moderate', stat: breakdown.moderate },
+    { key: 'high', label: 'High', stat: breakdown.high },
+    { key: 'veryHigh', label: 'Very high', stat: breakdown.veryHigh }
+  ];
+  const pointClassKey: Record<string, string> = { Low: 'low', Moderate: 'moderate', High: 'high', 'Very High': 'veryHigh' };
+
+  return (
+    <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 7 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: '#fde68a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          {visualMode === 'volume' ? 'Silt volume scale' : 'Silt classification'} · {record.dateLabel}
+        </span>
+        <span style={{ fontSize: 9, color: '#cbd5e1' }}>{visualMode === 'volume' ? 'm³ / 100 m²' : 'Basin share'}</span>
+      </div>
+
+      {visualMode === 'volume' && (
+      <div aria-label={`Silt volume scale from ${min} to ${max} cubic metres per 100 square metres`} style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 5 }}>
+        {stops.map((stop, index) => (
+          <div key={index} style={{ minWidth: 0, textAlign: 'center' }}>
+            <div
+              style={{
+                height: 18,
+                borderRadius: 5,
+                background: stop.color,
+                border: activeStop === index ? '2px solid #ffffff' : '1px solid rgba(255,255,255,0.28)',
+                boxShadow: activeStop === index ? '0 0 8px rgba(255,255,255,0.65)' : 'none'
+              }}
+              title={`${stop.value.toFixed(1)} m³ / 100 m²`}
+            />
+            <div style={{ marginTop: 3, fontSize: 9, fontWeight: 700, lineHeight: 1.2, color: '#e2e8f0' }}>
+              {index === 0 ? 'Low' : index === stops.length - 1 ? 'High' : `~${Math.round(stop.value)}`}
+            </div>
+            {(index === 0 || index === stops.length - 1) && (
+              <div style={{ fontSize: 9, color: '#94a3b8', lineHeight: 1.2 }}>{Math.round(stop.value)}</div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      )}
+      {visualMode === 'classification' && (
+        <>
+          <div style={{ fontSize: 9, fontWeight: 700, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Basin share by silt class
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 10px' }}>
+            {classes.map(({ key, label, stat }) => {
+              const isPointClass = pointClassKey[pointClass || ''] === key;
+              return (
+                <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, fontSize: 10, color: '#cbd5e1', outline: isPointClass ? `1px solid ${stat.color}` : '1px solid transparent', outlineOffset: 2, borderRadius: 3 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: 2, background: stat.color, flexShrink: 0 }} />
+                    <span>{label}</span>
+                  </span>
+                  <strong style={{ color: '#f8fafc', fontFamily: 'var(--font-mono)' }}>{stat.percent.toFixed(1)}%</strong>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
 
 export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndInspectorPanelProps> = ({
   inspection,
@@ -27,12 +119,13 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
   submergedAreaHa,
   submergedVolumeMCM,
   liveTelemetry,
-  activeTool,
-  onSelectTool,
   onOpenDamProfile,
   onOpenCrossSection,
   siltVisible = false,
-  siltMonthName
+  siltMonthName,
+  siltRecord,
+  siltVolumeLegend,
+  siltVisualMode = 'classification'
 }) => {
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
 
@@ -45,8 +138,8 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
     inspection.elevation < waterLevel &&
     (inspection.inTank || (inspection.waterDepth !== null && inspection.waterDepth > 0))
   );
-  const currentWaterDepth = isCurrentlySubmerged && inspection && inspection.elevation !== null
-    ? Math.max(0, Math.round((waterLevel - inspection.elevation) * 100) / 100)
+  const currentWaterDepth = isCurrentlySubmerged && inspection
+    ? Math.max(0, inspection.waterDepth ?? (inspection.elevation !== null ? Math.round((waterLevel - inspection.elevation) * 100) / 100 : 0))
     : 0;
 
   return (
@@ -120,10 +213,10 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
             )}
             <div>
               <h3 style={{ fontSize: 15, fontWeight: 700, color: '#f8fafc', lineHeight: 1.2 }}>
-                {inspection ? 'Point & Bed Inspection' : 'Reservoir Basin Overview'}
+                {inspection ? (siltVisible ? (siltVisualMode === 'classification' ? 'Silt Classification' : 'Silt Volume') : 'Point & Bed Inspection') : 'Reservoir Basin Overview'}
               </h3>
               <span style={{ fontSize: 11, color: '#94a3b8' }}>
-                {inspection ? 'Calibrated Survey Coordinates' : 'Chapoli M.I. Tank (Goa WRD)'}
+                {inspection ? (siltVisible ? (siltVisualMode === 'classification' ? 'Class and basin share at selected point' : 'Volume at selected point') : 'Selected point values') : 'Chapoli M.I. Tank (Goa WRD)'}
               </span>
             </div>
           </div>
@@ -178,7 +271,7 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
               /* --- INSPECTION ACTIVE STATE --- */
               <>
                 {/* Coordinates */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {!siltVisible && <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 13, fontWeight: 500, color: '#cbd5e1', whiteSpace: 'nowrap' }}>Geographic (WGS84):</span>
                     <strong style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: '#f8fafc', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>
@@ -191,10 +284,10 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
                       E {inspection.easting.toLocaleString()} m, N {inspection.northing.toLocaleString()} m
                     </span>
                   </div>
-                </div>
+                </div>}
 
                 {/* Hydrological Status Tag */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                {!siltVisible && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#cbd5e1' }}>Status:</span>
                   {isCurrentlySubmerged && currentWaterDepth > 0 ? (
                     <span
@@ -228,10 +321,10 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
                       {inspection.inTank ? 'EXPOSED BED / SHORELINE' : 'DRY SURROUNDING TERRAIN'}
                     </span>
                   )}
-                </div>
+                </div>}
 
                 {/* Elevation & Depth Metrics (Glassy card, 2x bigger numbers, removed pre-impoundment/sediment rows) */}
-                <div
+                {!siltVisible && <div
                   style={{
                     background: 'rgba(15, 23, 42, 0.32)',
                     backdropFilter: 'blur(10px)',
@@ -245,7 +338,7 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                     <span style={{ fontSize: 13, fontWeight: 500, color: '#e2e8f0' }}>
-                      {currentWaterDepth > 0 ? 'Reservoir Bed Elevation:' : 'Ground Surface Elevation:'}
+                      {currentWaterDepth > 0 ? 'DTM Bed Elevation:' : 'Ground Surface Elevation:'}
                     </span>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
                       <strong style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: inspection.elevation !== null ? '#38bdf8' : '#f43f5e' }}>
@@ -266,7 +359,9 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#f8fafc' }}>Water Column Depth:</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#f8fafc' }}>
+                      Water Depth:
+                    </span>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
                       <strong style={{ fontFamily: 'var(--font-mono)', fontSize: 24, fontWeight: 800, color: currentWaterDepth > 0 ? '#38bdf8' : '#94a3b8' }}>
                         {currentWaterDepth > 0 ? currentWaterDepth.toFixed(2) : '0.00'}
@@ -276,10 +371,10 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
                       </span>
                     </div>
                   </div>
-                </div>
+                </div>}
 
                 {/* Sentinel-2 Silt Metrics (Glassy card, shown ONLY when Silt layer is ON) */}
-                {siltVisible && inspection.siltClass && (
+                {siltVisible && (
                   <div
                     style={{
                       background: 'rgba(245, 158, 11, 0.08)',
@@ -294,9 +389,9 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                        Sentinel-2 Silt ({inspection.siltMonthName || siltMonthName || 'September'}):
+                        {siltVisualMode === 'classification' ? 'Silt Classification' : 'Silt Volume'} ({inspection.siltMonthName || siltMonthName || 'September'}):
                       </span>
-                      <span
+                      {siltVisualMode === 'classification' && (inspection.siltClass ? <span
                         style={{
                           fontSize: 11,
                           fontWeight: 800,
@@ -308,22 +403,26 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
                         }}
                       >
                         {inspection.siltClass}
-                      </span>
+                      </span> : <span style={{ fontSize: 10, color: '#cbd5e1' }}>No classified pixel</span>)}
                     </div>
 
-                    {inspection.siltVolumeScore !== undefined && (
+                    {siltVisualMode === 'volume' && inspection.siltVolumeM3 !== undefined && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                        <span style={{ fontSize: 13, fontWeight: 500, color: '#e2e8f0' }}>Pixel Volume Score:</span>
+                        <span style={{ fontSize: 13, fontWeight: 500, color: '#e2e8f0' }}>Point Silt Volume:</span>
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
                           <strong style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: '#fbbf24' }}>
-                            {inspection.siltVolumeScore.toFixed(1)}
+                            {inspection.siltVolumeM3.toFixed(2)}
                           </strong>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: '#fde68a' }}>m³ / 100m²</span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: '#fde68a' }}>m³</span>
                         </div>
                       </div>
                     )}
 
-                    {inspection.siltThicknessM !== undefined && (
+                    {siltVisualMode === 'volume' && inspection.siltVolumeM3 === undefined && (
+                      <div style={{ fontSize: 12, color: '#cbd5e1' }}>No silt volume at this point.</div>
+                    )}
+
+                    {siltVisualMode === 'volume' && inspection.siltThicknessM !== undefined && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                         <span style={{ fontSize: 13, fontWeight: 500, color: '#e2e8f0' }}>Estimated Silt Layer:</span>
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
@@ -334,22 +433,27 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
                         </div>
                       </div>
                     )}
+
+                    {siltRecord && siltVolumeLegend && (
+                      <SiltVolumeLegend
+                        record={siltRecord}
+                        volumeLegend={siltVolumeLegend}
+                        pointValue={inspection.siltVolumeScore}
+                        pointClass={inspection.siltClass}
+                        visualMode={siltVisualMode}
+                      />
+                    )}
                   </div>
                 )}
 
                 {/* Provenance Footer */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: '#94a3b8', paddingTop: 2 }}>
-                  <span>Provenance: <strong style={{ color: '#34d399' }}>{siltVisible && inspection.siltClass ? 'OBSERVED (Sentinel-2)' : (inspection.provenance || 'OBSERVED')}</strong></span>
+                {!siltVisible && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: '#94a3b8', paddingTop: 2 }}>
                   <span style={{ fontSize: 10, color: '#64748b' }}>Click another point to inspect</span>
-                </div>
+                </div>}
               </>
             ) : (
               /* --- RESERVOIR DEFAULT OVERVIEW STATE --- */
               <>
-                <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.4 }}>
-                  Real-time 3D spatial engineering model of Chapoli Tank, bounded by natural Western Ghats topography and a 760m earthen dam.
-                </div>
-
                 {/* Key Hydrological Benchmarks (Glassy card, 2x bigger numbers) */}
                 <div
                   style={{
@@ -431,47 +535,6 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
                   </div>
                 </div>
 
-                {/* Interactive Click Invitation Box */}
-                <div
-                  style={{
-                    background: 'rgba(14, 165, 233, 0.12)',
-                    border: '1px solid rgba(14, 165, 233, 0.35)',
-                    borderRadius: 8,
-                    padding: 10,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 6
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#38bdf8', fontSize: 11, fontWeight: 700 }}>
-                    <Activity size={14} />
-                    <span>Interactive 3D Point Inspector</span>
-                  </div>
-                  <p style={{ margin: 0, fontSize: 10, color: '#cbd5e1', lineHeight: 1.4 }}>
-                    Click anywhere on the reservoir basin, shoreline, or dam to inspect precise ground elevations, water column depth, and Sentinel-2 sediment data.
-                  </p>
-                  <button
-                    onClick={() => onSelectTool(activeTool === 'inspect' ? null : 'inspect')}
-                    style={{
-                      marginTop: 2,
-                      padding: '5px 10px',
-                      background: activeTool === 'inspect' ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' : 'rgba(15, 23, 42, 0.7)',
-                      border: '1px solid rgba(56, 189, 248, 0.4)',
-                      borderRadius: 6,
-                      color: '#ffffff',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 6
-                    }}
-                  >
-                    <Sparkles size={13} color="#38bdf8" />
-                    {activeTool === 'inspect' ? 'Inspector Active (Click Scene)' : 'Activate Point Inspector'}
-                  </button>
-                </div>
               </>
             )}
           </div>

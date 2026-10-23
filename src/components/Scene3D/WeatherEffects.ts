@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LiveWeather, isRainy } from '../../utils/liveWeather';
+import { LiveWeather, rainIntensityFor } from '../../utils/liveWeather';
 
 /** Where a raindrop lands: scene-space height and whether it hits the reservoir water. */
 export type SurfaceSampler = (x: number, z: number) => { y: number; water: boolean } | null;
@@ -65,6 +65,8 @@ export class WeatherEffects {
   private wind = new THREE.Vector2(0, 0); // scene units / s the clouds drift (x east, z south)
   private windKmh = 0;
   private raining = false;
+  private activeRainDrops = 0;
+  private rainSpeedMultiplier = 1;
   private surface: SurfaceSampler | null = null;
   private cloudSignature = '';
 
@@ -85,6 +87,7 @@ export class WeatherEffects {
     this.rainPositions = new Float32Array(RAIN_DROPS * 6);
     const rainGeo = new THREE.BufferGeometry();
     rainGeo.setAttribute('position', new THREE.BufferAttribute(this.rainPositions, 3));
+    rainGeo.setDrawRange(0, 0);
     this.rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({
       color: 0xd6e6f5,
       transparent: true,
@@ -135,7 +138,12 @@ export class WeatherEffects {
     this.wind.set(Math.sin(toward) * speed, -Math.cos(toward) * speed);
     this.windKmh = w.windSpeedKmh;
 
-    const rain = isRainy(w.weatherCode);
+    const previousDropCount = this.activeRainDrops;
+    const intensity = rainIntensityFor(w.precipitationMm);
+    const rain = intensity !== 'none';
+    this.activeRainDrops = intensity === 'light' ? 1200 : intensity === 'moderate' ? 2800 : intensity === 'heavy' ? RAIN_DROPS : 0;
+    this.rainSpeedMultiplier = intensity === 'light' ? 0.65 : intensity === 'moderate' ? 1 : 1.5;
+    this.rain.geometry.setDrawRange(0, this.activeRainDrops * 2);
     const cloud = w.cloudCover / 100;
     const count = rain ? 9 : Math.round(5 + cloud * 22);
     const signature = `${count}-${rain}`;
@@ -148,8 +156,8 @@ export class WeatherEffects {
       this.raining = rain;
       this.rain.visible = rain;
       this.ripples.visible = rain;
-      if (rain) this.resetRain();
     }
+    if (rain && (previousDropCount !== this.activeRainDrops || !this.drops.length)) this.resetRain();
   }
 
   private buildClouds(count: number, rain: boolean) {
@@ -184,12 +192,12 @@ export class WeatherEffects {
     d.z = z;
     d.ground = hit.y;
     d.water = hit.water;
-    d.speed = RAIN_FALL_SPEED * (0.85 + Math.random() * 0.3);
+    d.speed = RAIN_FALL_SPEED * this.rainSpeedMultiplier * (0.85 + Math.random() * 0.3);
     d.y = anywhereInColumn ? hit.y + Math.random() * (top - hit.y) : top;
   }
 
   private resetRain() {
-    for (let i = 0; i < RAIN_DROPS; i++) this.spawnDrop(i, true);
+    for (let i = 0; i < this.activeRainDrops; i++) this.spawnDrop(i, true);
   }
 
   private addRipple(x: number, y: number, z: number, water: boolean) {
@@ -227,7 +235,7 @@ export class WeatherEffects {
     const sx = (this.wind.x / wl) * slant;
     const sz = (this.wind.y / wl) * slant;
     let ripplesThisFrame = 0;
-    for (let i = 0; i < RAIN_DROPS; i++) {
+    for (let i = 0; i < this.activeRainDrops; i++) {
       const d = this.drops[i];
       d.y -= d.speed * step;
       d.x += sx * d.speed * step;

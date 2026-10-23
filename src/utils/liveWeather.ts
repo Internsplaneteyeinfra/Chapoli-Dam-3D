@@ -6,10 +6,12 @@
 export interface LiveWeather {
   temperatureC: number | null;
   cloudCover: number; // 0..100 %
+  precipitationMm: number; // precipitation reported for the preceding hour
   weatherCode: number; // WMO code
   isDay: boolean;
   windSpeedKmh: number;
   windDirectionDeg: number; // meteorological: direction the wind blows FROM, clockwise from north
+  rainForecast: { minutesUntil: number; amountMm: number; probability: number } | null;
   fetchedAt: Date;
   ok: boolean; // false when the API could not be reached (sun-only fallback)
 }
@@ -32,45 +34,54 @@ const OPEN_METEO_URL = 'https://api.open-meteo.com/v1/forecast';
 
 export const fetchLiveWeather = async (lat: number, lon: number): Promise<LiveWeather> => {
   const url = `${OPEN_METEO_URL}?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}`
-    + '&current=temperature_2m,cloud_cover,weather_code,is_day,wind_speed_10m,wind_direction_10m&timezone=auto';
+    + '&current=temperature_2m,cloud_cover,precipitation,weather_code,is_day,wind_speed_10m,wind_direction_10m'
+    + '&hourly=precipitation,precipitation_probability&forecast_hours=24&timezone=auto';
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Open-Meteo ${res.status}`);
     const json = await res.json();
     const cur = json.current ?? {};
+    const hourly = json.hourly ?? {};
+    const utcOffsetSeconds = Number(json.utc_offset_seconds) || 0;
+    const currentTimeMs = typeof cur.time === 'string'
+      ? Date.parse(`${cur.time}Z`) - utcOffsetSeconds * 1000
+      : Date.now();
+    const forecastTimes: string[] = Array.isArray(hourly.time) ? hourly.time : [];
+    const forecastAmounts: number[] = Array.isArray(hourly.precipitation) ? hourly.precipitation : [];
+    const forecastProbabilities: number[] = Array.isArray(hourly.precipitation_probability) ? hourly.precipitation_probability : [];
+    let rainForecast: LiveWeather['rainForecast'] = null;
+    for (let i = 0; i < forecastTimes.length; i++) {
+      const forecastTimeMs = Date.parse(`${forecastTimes[i]}Z`) - utcOffsetSeconds * 1000;
+      const amountMm = Number(forecastAmounts[i]) || 0;
+      const probability = Number(forecastProbabilities[i]) || 0;
+      if (forecastTimeMs > currentTimeMs && amountMm > 0 && probability >= 20) {
+        rainForecast = {
+          minutesUntil: Math.max(1, Math.round((forecastTimeMs - currentTimeMs) / 60000)),
+          amountMm,
+          probability
+        };
+        break;
+      }
+    }
     return {
       temperatureC: typeof cur.temperature_2m === 'number' ? cur.temperature_2m : null,
       cloudCover: typeof cur.cloud_cover === 'number' ? cur.cloud_cover : 0,
+      precipitationMm: typeof cur.precipitation === 'number' ? cur.precipitation : 0,
       weatherCode: typeof cur.weather_code === 'number' ? cur.weather_code : 0,
       isDay: cur.is_day === 1,
       windSpeedKmh: typeof cur.wind_speed_10m === 'number' ? cur.wind_speed_10m : 0,
       windDirectionDeg: typeof cur.wind_direction_10m === 'number' ? cur.wind_direction_10m : 0,
+      rainForecast,
       fetchedAt: new Date(),
       ok: true
     };
   } catch {
     const sun = solarPosition(new Date(), lat, lon);
     return {
-      temperatureC: null, cloudCover: 0, weatherCode: 0, isDay: sun.elevationDeg > 0,
-      windSpeedKmh: 0, windDirectionDeg: 0, fetchedAt: new Date(), ok: false
+      temperatureC: null, cloudCover: 0, precipitationMm: 0, weatherCode: 0, isDay: sun.elevationDeg > 0,
+      windSpeedKmh: 0, windDirectionDeg: 0, rainForecast: null, fetchedAt: new Date(), ok: false
     };
   }
-};
-
-/** WMO codes for drizzle, rain, showers and thunderstorms. */
-export const isRainy = (code: number): boolean =>
-  (code >= 51 && code <= 67) || (code >= 80 && code <= 82) || code >= 95;
-
-/**
- * Optional `?weather=rain|cloudy|clear` URL override to preview a weather state;
- * keeps the live temperature and wind.
- */
-export const applyWeatherOverride = (w: LiveWeather): LiveWeather => {
-  const mode = new URLSearchParams(window.location.search).get('weather');
-  if (mode === 'rain') return { ...w, weatherCode: 63, cloudCover: Math.max(w.cloudCover, 85) };
-  if (mode === 'cloudy') return { ...w, weatherCode: 3, cloudCover: 90 };
-  if (mode === 'clear') return { ...w, weatherCode: 0, cloudCover: 10 };
-  return w;
 };
 
 /** 16-point compass label for a bearing in degrees. */
@@ -97,13 +108,19 @@ export const solarPosition = (date: Date, lat: number, lon: number): SunPosition
   return { elevationDeg: elev / rad, azimuthDeg: ((az / rad) + 360) % 360 };
 };
 
-/** Short human label for a WMO weather code. */
-export const describeWeather = (code: number, cloudCover: number): string => {
-  if (code >= 95) return 'Thunderstorm';
-  if (code >= 80) return 'Rain showers';
-  if (code >= 61) return 'Rain';
-  if (code >= 51) return 'Drizzle';
-  if (code >= 45) return 'Fog';
+export type RainIntensity = 'none' | 'light' | 'moderate' | 'heavy';
+
+/** Rain intensity from the precipitation total reported for the preceding hour. */
+export const rainIntensityFor = (precipitationMm: number): RainIntensity => {
+  if (precipitationMm <= 0) return 'none';
+  if (precipitationMm < 2.5) return 'light';
+  if (precipitationMm < 7.6) return 'moderate';
+  return 'heavy';
+};
+
+export const describeWeather = (cloudCover: number, precipitationMm: number): string => {
+  const intensity = rainIntensityFor(precipitationMm);
+  if (intensity !== 'none') return `${intensity[0].toUpperCase()}${intensity.slice(1)} rain`;
   if (cloudCover >= 85) return 'Overcast';
   if (cloudCover >= 40) return 'Partly cloudy';
   if (cloudCover >= 15) return 'Mostly clear';
@@ -138,7 +155,6 @@ export const skyPaletteFor = (weather: LiveWeather, sun: SunPosition): SkyPalett
   horizon = mix(horizon, hex('#f2c08a'), goldenT * 0.45);
 
   const cloud = clamp01(weather.cloudCover / 100);
-  const rain = isRainy(weather.weatherCode);
   return {
     top,
     horizon,
@@ -146,7 +162,6 @@ export const skyPaletteFor = (weather: LiveWeather, sun: SunPosition): SkyPalett
     sunVisible: clamp01((e + 1) / 3) * (1 - 0.6 * cloud),
     // Always a few clouds, even when sunny
     cloudCover: Math.max(0.15, cloud * 0.55),
-    // Rain: only slightly darker clouds, the sky itself stays blue
-    cloudColor: rain ? hex('#aab4bf') : mix(hex('#dfe8f2'), hex('#ffffff'), dayT)
+    cloudColor: mix(hex('#dfe8f2'), hex('#ffffff'), dayT)
   };
 };
