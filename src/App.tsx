@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import rawData from './data/chapoli_data.json';
 import rawSiltData from './data/silt_series.json';
 import rawWaterDepthData from './data/water_depth.json';
@@ -8,7 +8,10 @@ import { ChapoliData, InspectionResult, ImportedSurvey, DtmSurfaceMode } from '.
 import { SiltSeriesPayload, SiltVisualMode } from './types/silt';
 import { SedimentAnalysisEngine } from './utils/sedimentAnalysis';
 import { ReservoirCanvas } from './components/Scene3D/ReservoirCanvas';
-import { FileDown, Waves } from 'lucide-react';
+import { FileDown, Waves, Thermometer, Wind, Droplets, CloudSun, CloudMoon } from 'lucide-react';
+import {
+  LiveWeather, describeWeather, describeForecastSky, rainIntensityFor, compassLabel, fetchLiveWeather
+} from './utils/liveWeather';
 import { ReservoirOverviewAndInspectorPanel } from './components/Dashboard/ReservoirOverviewAndInspectorPanel';
 import { RightVerticalToolbar, RightToolbarTab } from './components/Dashboard/RightVerticalToolbar';
 import { SiltTimelineControl } from './components/Dashboard/SiltTimelineControl';
@@ -19,11 +22,29 @@ import { ExportReportModal } from './components/Dashboard/ExportReportModal';
 import { DamElevationProfileModal } from './components/Dashboard/DamElevationProfileModal';
 import chapoliLogo from './assets/chapoli-logo.png';
 
+const getWeatherEmoji = (weather: LiveWeather | null): string => {
+  if (!weather || !weather.ok) return '🌦️';
+  if (weather.precipitationMm > 0) {
+    if (weather.precipitationMm >= 7.6) return '⛈️';
+    if (weather.precipitationMm >= 2.5) return '🌧️';
+    return '🌦️';
+  }
+  if (weather.cloudCover >= 80) return '☁️';
+  if (weather.cloudCover >= 35) return weather.isDay ? '⛅' : '☁️';
+  return weather.isDay ? '☀️' : '🌙';
+};
+
 export const App: React.FC = () => {
   const data = (rawData as unknown) as ChapoliData;
   const siltData = (rawSiltData as unknown) as SiltSeriesPayload;
   const waterDepthData = (rawWaterDepthData as unknown) as WaterDepthPayload;
   const engine = useMemo(() => new SedimentAnalysisEngine(data), [data]);
+  const [liveWeather, setLiveWeather] = useState<LiveWeather | null>(null);
+  const [isMobileWeatherOpen, setIsMobileWeatherOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    fetchLiveWeather(15.0244, 74.0453).then(w => setLiveWeather(w)).catch(() => {});
+  }, []);
 
   // Operational Simulation State
   const [waterLevel, setWaterLevel] = useState<number>(38.25); // Default to FRL (38.25m)
@@ -246,6 +267,7 @@ export const App: React.FC = () => {
             permanentWaterDepthScale={permanentWaterDepthScale}
             viewPresetTrigger={viewPresetTrigger}
             navigationRightOffset={activeRightTab ? 450 : 70}
+            onWeatherLoaded={setLiveWeather}
           />
 
           <img
@@ -355,6 +377,23 @@ export const App: React.FC = () => {
             </div>
           )}
 
+          {/* Backdrop for closing mobile weather popover when clicking outside */}
+          {isMobileWeatherOpen && (
+            <div
+              className="mobile-weather-backdrop"
+              onClick={() => setIsMobileWeatherOpen(false)}
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                width: '100vw',
+                height: '100vh',
+                zIndex: 44,
+                background: 'transparent'
+              }}
+            />
+          )}
+
           {/* Floating top-right actions */}
           <div
             className={`scene-actions${activeRightTab ? ' drawer-open' : ''}`}
@@ -370,6 +409,34 @@ export const App: React.FC = () => {
               gap: 8
             }}
           >
+            {/* Mobile-Only Weather Emoji Button (side of Bathymetry button) */}
+            <button
+              onClick={() => setIsMobileWeatherOpen(prev => !prev)}
+              title={liveWeather ? `Weather: ${liveWeather.temperatureC !== null ? `${liveWeather.temperatureC.toFixed(1)}°C` : '--'}, ${describeWeather(liveWeather.cloudCover, liveWeather.precipitationMm)}` : 'Live Weather'}
+              className={`mobile-weather-btn ${isMobileWeatherOpen ? 'active' : ''}`}
+              aria-label="Toggle live reservoir weather"
+              style={{
+                height: 38,
+                width: 38,
+                minWidth: 38,
+                padding: 0,
+                fontSize: 18,
+                borderRadius: 8,
+                border: isMobileWeatherOpen ? '1px solid #38bdf8' : '1px solid rgba(56, 189, 248, 0.4)',
+                background: isMobileWeatherOpen ? 'rgba(14, 165, 233, 0.3)' : 'rgba(8, 14, 28, 0.88)',
+                color: '#e0f2fe',
+                display: 'none', // Handled by CSS: display: flex on mobile <= 600px, hidden on tablet/PC/laptop
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                backdropFilter: 'blur(12px)',
+                boxShadow: isMobileWeatherOpen ? '0 0 14px rgba(56, 189, 248, 0.5)' : '0 4px 18px rgba(0, 0, 0, 0.45)',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <span style={{ transform: 'translateY(-0.5px)' }}>{getWeatherEmoji(liveWeather)}</span>
+            </button>
+
             <button
               onClick={() => setIsDepthBathymetryOpen(true)}
               title="Open the depth bathymetry viewer"
@@ -420,6 +487,123 @@ export const App: React.FC = () => {
               <FileDown size={15} />
               <span>Export</span>
             </button>
+
+            {/* Mobile Weather Popover Card (Mobile Phones Only) */}
+            {isMobileWeatherOpen && liveWeather && (
+              <div
+                className="mobile-weather-popover"
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 8px)',
+                  right: 0,
+                  width: 'min(310px, calc(100vw - 16px))',
+                  background: 'rgba(8, 14, 28, 0.95)',
+                  border: '1px solid rgba(56, 189, 248, 0.4)',
+                  borderRadius: 12,
+                  padding: '12px 14px',
+                  boxShadow: '0 12px 36px rgba(0,0,0,0.7), 0 0 16px rgba(56, 189, 248, 0.2)',
+                  backdropFilter: 'blur(16px)',
+                  zIndex: 60,
+                  color: '#f8fafc',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10
+                }}
+              >
+                {/* Header with Title and Close X */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 16 }}>{getWeatherEmoji(liveWeather)}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#e0f2fe' }}>Chapoli Weather</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: liveWeather.ok ? '#34d399' : '#fbbf24', marginLeft: 4 }}>
+                      ● {liveWeather.ok ? 'Live' : 'Offline'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setIsMobileWeatherOpen(false)}
+                    style={{
+                      background: 'rgba(255,255,255,0.06)',
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      borderRadius: 6,
+                      color: '#94a3b8',
+                      cursor: 'pointer',
+                      padding: '2px 6px',
+                      fontSize: 12,
+                      lineHeight: 1
+                    }}
+                    aria-label="Close weather"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Temperature & Condition Main Block */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Thermometer size={22} color="#fbbf24" />
+                    <span style={{ fontSize: 26, fontWeight: 800, color: '#ffffff', fontFamily: 'var(--font-mono)', lineHeight: 1 }}>
+                      {liveWeather.temperatureC !== null ? `${liveWeather.temperatureC.toFixed(1)}°C` : '--°C'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, lineHeight: 1.25 }}>
+                    <strong style={{ fontSize: 12, color: '#f1f5f9' }}>
+                      {describeWeather(liveWeather.cloudCover, liveWeather.precipitationMm)}
+                    </strong>
+                    <span style={{ fontSize: 10, color: '#94a3b8' }}>
+                      {liveWeather.ok
+                        ? rainIntensityFor(liveWeather.precipitationMm) === 'none'
+                          ? `${liveWeather.cloudCover}% cloud cover`
+                          : `${liveWeather.precipitationMm.toFixed(1)} mm in last hour`
+                        : 'Telemetry offline'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Next Hour Forecast */}
+                {liveWeather.ok && liveWeather.nextHourForecast && (
+                  <div
+                    style={{
+                      background: 'rgba(14, 165, 233, 0.1)',
+                      border: '1px solid rgba(56, 189, 248, 0.2)',
+                      borderRadius: 8,
+                      padding: '6px 10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      fontSize: 10,
+                      color: '#7dd3fc'
+                    }}
+                  >
+                    {liveWeather.nextHourForecast.amountMm > 0 ? (
+                      <Droplets size={14} style={{ flexShrink: 0 }} />
+                    ) : liveWeather.nextHourForecast.isDay ? (
+                      <CloudSun size={14} style={{ flexShrink: 0 }} />
+                    ) : (
+                      <CloudMoon size={14} style={{ flexShrink: 0 }} />
+                    )}
+                    <span>
+                      Next hour: {liveWeather.nextHourForecast.amountMm > 0
+                        ? `Rain · ${liveWeather.nextHourForecast.amountMm.toFixed(1)} mm (${liveWeather.nextHourForecast.probability}%)`
+                        : `${describeForecastSky(liveWeather.nextHourForecast.cloudCover, liveWeather.nextHourForecast.isDay)} · no rain`}
+                    </span>
+                  </div>
+                )}
+
+                {/* Wind & Coordinates Sub-row */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10, color: '#94a3b8', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 6 }}>
+                  {liveWeather.ok && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Wind size={13} color="#7dd3fc" />
+                      <strong style={{ color: '#e2e8f0' }}>{liveWeather.windSpeedKmh.toFixed(0)} km/h</strong>
+                      <span>from {compassLabel(liveWeather.windDirectionDeg)}</span>
+                    </span>
+                  )}
+                  <span style={{ marginLeft: 'auto', color: '#64748b' }}>
+                    15.0244°N, 74.0453°E
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

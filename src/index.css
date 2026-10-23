@@ -280,6 +280,19 @@ input[type="range"]::-webkit-slider-thumb:hover {
   animation: pulse-subtle 2.5s infinite;
 }
 
+/* Mobile-only weather toggle & popover: hidden by default on all screens (PCs, laptops, tablets) */
+.mobile-weather-btn {
+  display: none !important;
+}
+
+.mobile-weather-popover {
+  display: none !important;
+}
+
+.mobile-weather-backdrop {
+  display: none !important;
+}
+
 /* Keep the weather readout in its original lower-left position. */
 .weather-chip {
   bottom: 24px;
@@ -639,7 +652,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 
 /* Compact phone portrait layouts */
-@media (max-width: 520px) {
+@media (max-width: 600px) {
   .view-preset-controls {
     top: 58px !important;
     max-width: calc(100vw - 16px);
@@ -709,19 +722,9 @@ input[type="range"]::-webkit-slider-thumb:hover {
     overflow: visible !important;
   }
 
+  /* On mobile phones, hide the bottom weather chip to keep reservoir water view clean */
   .weather-chip {
-    top: auto;
-    bottom: 150px !important;
-    left: 8px;
-    right: 8px;
-    max-width: calc(100vw - 16px);
-    width: auto;
-    padding: 6px 8px !important;
-    gap: 6px !important;
-  }
-
-  .weather-chip > span:nth-of-type(1) {
-    font-size: 18px !important;
+    display: none !important;
   }
 
   .silt-timeline > div:first-child,
@@ -856,60 +859,32 @@ input[type="range"]::-webkit-slider-thumb:hover {
     z-index: 39 !important;
   }
 
+  /* On mobile phones, hide the bottom weather chip */
   .weather-chip {
-    top: auto !important;
-    right: 8px !important;
-    bottom: clamp(170px, 26vh, 190px) !important;
-    left: 8px !important;
-    width: auto !important;
-    max-width: none !important;
-    display: grid !important;
-    grid-template-columns: auto auto minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 3px 6px !important;
-    padding: 5px 7px !important;
-    font-size: 9px !important;
-    box-sizing: border-box;
+    display: none !important;
   }
 
-  .weather-chip > span:nth-of-type(1) {
-    font-size: 20px !important;
-    grid-column: 2;
-    grid-row: 1;
+  /* Mobile emoji weather toggle button in header beside Depth Bathymetry */
+  .mobile-weather-btn {
+    display: flex !important;
+    height: 30px !important;
+    width: 30px !important;
+    min-width: 30px !important;
+    font-size: 15px !important;
+    padding: 0 !important;
+    align-items: center !important;
+    justify-content: center !important;
   }
 
-  .weather-chip .weather-details {
-    grid-column: 3;
-    grid-row: 1;
-    font-size: 8px !important;
-    min-width: 0;
+  .mobile-weather-popover {
+    display: flex !important;
+    top: 36px !important;
+    right: 0 !important;
+    width: min(300px, calc(100vw - 16px)) !important;
   }
 
-  .weather-chip .weather-next-hour {
-    font-size: 8px !important;
-    line-height: 1.2;
-  }
-
-  .weather-chip > span:last-child {
-    grid-column: 4;
-    grid-row: 1;
-    justify-content: flex-start !important;
-    border-left: 1px solid rgba(255, 255, 255, 0.18) !important;
-    border-top: 0 !important;
-    padding: 0 0 0 6px !important;
-    font-size: 8px !important;
-    align-self: stretch;
-  }
-
-  .weather-chip > span:last-child svg {
-    width: 13px;
-    height: 13px;
-  }
-
-  .weather-chip .weather-next-hour {
-    font-size: 8px !important;
-    line-height: 1.2;
-    margin-top: 1px;
+  .mobile-weather-backdrop {
+    display: block !important;
   }
 
   .bottom-control-dock {
