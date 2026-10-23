@@ -171,6 +171,7 @@ export const RightVerticalToolbar: React.FC<RightVerticalToolbarProps> = ({
 
   return (
     <div
+      className="right-toolbar-root"
       style={{
         position: 'absolute',
         top: 0,
@@ -184,6 +185,7 @@ export const RightVerticalToolbar: React.FC<RightVerticalToolbarProps> = ({
       {/* Sliding Glassmorphic Panel (when a tab is active) */}
       {activeTab && (
         <aside
+          className="right-toolbar-drawer"
           style={{
             width: 390,
             height: '100%',
@@ -623,6 +625,7 @@ export const RightVerticalToolbar: React.FC<RightVerticalToolbarProps> = ({
 
       {/* Vertical Icon Toolbar Dock (Always visible on right edge) */}
       <div
+        className="right-toolbar-dock"
         style={{
           width: 52,
           height: '100%',

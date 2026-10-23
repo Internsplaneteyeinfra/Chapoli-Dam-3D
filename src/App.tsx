@@ -188,7 +188,7 @@ export const App: React.FC = () => {
   }, [siltMonth, siltData, siltVisible, inspectedPoint?.x, inspectedPoint?.z, inspectedPoint?.siltTextureU, inspectedPoint?.siltTextureV]);
 
   return (
-    <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div className="app-shell" style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {isDepthBathymetryOpen && (
         <div
           style={{
@@ -208,9 +208,9 @@ export const App: React.FC = () => {
         </div>
       )}
       {/* Main Workspace: 3D Viewport + Engineering Sidebars */}
-      <div style={{ flex: 1, position: 'relative', display: 'flex', overflow: 'hidden' }}>
+      <div className="workspace-shell" style={{ flex: 1, position: 'relative', display: 'flex', overflow: 'hidden' }}>
         {/* Three.js Interactive 3D Canvas */}
-        <div style={{ flex: 1, height: '100%', position: 'relative' }}>
+        <div className="scene-shell" style={{ flex: 1, height: '100%', position: 'relative' }}>
           <ReservoirCanvas
             data={data}
             waterLevel={waterLevel}
@@ -249,6 +249,7 @@ export const App: React.FC = () => {
           />
 
           <img
+            className="app-logo"
             src={chapoliLogo}
             alt="Chapoli 3D Sediment Measurement Digital Twin"
             style={{
@@ -266,6 +267,7 @@ export const App: React.FC = () => {
 
           {/* Bottom dock: water on/off toggle above the silt timeline HUD */}
           <div
+            className="bottom-control-dock"
             style={{
               position: 'absolute',
               bottom: 24,
@@ -355,6 +357,7 @@ export const App: React.FC = () => {
 
           {/* Floating top-right actions */}
           <div
+            className={`scene-actions${activeRightTab ? ' drawer-open' : ''}`}
             style={{
               position: 'absolute',
               top: 20,
@@ -387,7 +390,7 @@ export const App: React.FC = () => {
                 boxShadow: '0 4px 18px rgba(0, 0, 0, 0.45)',
                 whiteSpace: 'nowrap'
               }}
-              className="hover:brightness-110 active:scale-95"
+              className="depth-bathymetry-action hover:brightness-110 active:scale-95"
             >
               <Waves size={15} />
               <span>Depth Bathymetry</span>
@@ -412,7 +415,7 @@ export const App: React.FC = () => {
                 boxShadow: '0 4px 18px rgba(0, 0, 0, 0.45), 0 0 12px rgba(56, 189, 248, 0.3)',
                 transition: 'all 0.15s ease'
               }}
-              className="hover:brightness-110 active:scale-95"
+              className="export-action hover:brightness-110 active:scale-95"
             >
               <FileDown size={15} />
               <span>Export</span>

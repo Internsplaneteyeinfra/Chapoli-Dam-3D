@@ -313,6 +313,483 @@ input[type="range"]::-webkit-slider-thumb:hover {
   }
 }
 
+/* Desktop and laptop layouts */
+.app-shell {
+  width: 100vw !important;
+  width: 100dvw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+}
+
+/* Keep the point inspector fully visible instead of scrolling inside the card. */
+.reservoir-inspector-panel {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.bottom-control-dock > div {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+}
+
+/* Keep the lower controls visible in the open space beside the weather card. */
+@media (min-width: 901px) {
+  .bottom-control-dock {
+    position: fixed !important;
+    left: clamp(460px, 40vw, 780px) !important;
+    right: auto !important;
+    bottom: 20px !important;
+    width: min(780px, calc(100vw - clamp(460px, 40vw, 780px) - 120px)) !important;
+    transform: none !important;
+    z-index: 60 !important;
+    align-items: center !important;
+  }
+}
+
+.water-control-docked {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.water-control-docked > * {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.water-control-docked .water-depth-summary {
+  min-width: 0;
+  justify-content: center;
+  flex-wrap: wrap;
+  white-space: normal !important;
+}
+
+@media (max-width: 1200px) {
+  .reservoir-inspector-panel {
+    left: 12px !important;
+    width: min(360px, calc(100vw - 78px)) !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .right-toolbar-drawer {
+    width: min(350px, calc(100vw - 56px)) !important;
+    padding: 12px !important;
+  }
+
+  .scene-navigation-controls.drawer-open {
+    display: none !important;
+  }
+
+  .scene-actions.drawer-open {
+    right: calc(min(350px, 100vw - 56px) + 60px) !important;
+  }
+
+  .bottom-control-dock {
+    width: min(94%, 720px) !important;
+  }
+}
+
+/* Keep the basin clear on scaled laptops and medium desktop screens. */
+@media (min-width: 901px) and (max-width: 1450px) {
+  .reservoir-inspector-panel {
+    left: 12px !important;
+    top: 120px !important;
+    width: min(340px, calc(100vw - 460px)) !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .bottom-control-dock {
+    left: clamp(460px, 40vw, 780px) !important;
+    right: auto !important;
+    bottom: 20px !important;
+    width: min(780px, calc(100vw - clamp(460px, 40vw, 780px) - 120px)) !important;
+    transform: none !important;
+    box-sizing: border-box;
+    align-items: center !important;
+  }
+
+  .water-control-row {
+    max-width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px !important;
+  }
+
+  .water-depth-summary {
+    max-width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+    white-space: normal !important;
+    overflow: visible !important;
+  }
+
+  .inspector-coordinate-row {
+    flex-wrap: wrap;
+    justify-content: flex-start !important;
+    gap: 2px 6px !important;
+  }
+
+  .inspector-coordinate-row > * {
+    white-space: normal !important;
+  }
+
+  .weather-chip {
+    top: auto;
+    right: auto;
+    bottom: 24px !important;
+    left: 20px;
+    width: min(420px, calc(100vw - 500px));
+    max-width: min(420px, calc(100vw - 500px));
+  }
+
+  .silt-timeline {
+    max-width: 100%;
+    overflow: visible;
+  }
+
+  .reservoir-inspector-panel > div:first-child {
+    padding: 8px 12px !important;
+  }
+
+  .reservoir-inspector-panel > div:nth-child(2) {
+    padding: 10px 12px !important;
+    gap: 8px !important;
+  }
+
+  .reservoir-inspector-panel [style*="font-size: 13px"] {
+    font-size: 11px !important;
+  }
+
+  .reservoir-inspector-panel [style*="font-size: 22px"],
+  .reservoir-inspector-panel [style*="font-size: 24px"] {
+    font-size: 19px !important;
+  }
+}
+
+/* Tablets and phones: turn the tool rail into a touch-friendly bottom bar. */
+@media (max-width: 900px) {
+  .app-logo {
+    top: 4px !important;
+    left: 8px !important;
+    width: clamp(82px, 18vw, 112px) !important;
+    height: 54px !important;
+  }
+
+  .view-preset-controls {
+    top: 66px !important;
+    left: 8px !important;
+    max-width: calc(100vw - 64px);
+    flex-wrap: wrap;
+    overflow: visible !important;
+  }
+
+  .view-preset-controls button {
+    flex: 0 0 auto;
+    padding: 5px 8px !important;
+    font-size: 10px !important;
+  }
+
+  .scene-navigation-controls {
+    top: 66px !important;
+    right: 10px !important;
+  }
+
+  .scene-navigation-controls.drawer-open {
+    display: none !important;
+  }
+
+  .scene-actions,
+  .scene-actions.drawer-open {
+    top: 10px !important;
+    right: 60px !important;
+    gap: 5px !important;
+  }
+
+  .scene-actions button {
+    height: 34px !important;
+    padding: 0 9px !important;
+    font-size: 10px !important;
+  }
+
+  .reservoir-inspector-panel {
+    left: 8px !important;
+    top: 112px !important;
+    width: min(360px, calc(100vw - 72px)) !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .bottom-control-dock {
+    left: 8px !important;
+    bottom: 62px !important;
+    width: calc(100vw - 64px) !important;
+    transform: none !important;
+    align-items: stretch !important;
+    overflow: visible !important;
+    gap: 6px !important;
+  }
+
+  .water-control-row {
+    max-width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px !important;
+  }
+
+  .water-depth-summary {
+    max-width: calc(100vw - 82px);
+    flex-wrap: wrap;
+    justify-content: center;
+    white-space: normal !important;
+    overflow: visible !important;
+  }
+
+  .silt-timeline {
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 8px !important;
+  }
+
+  .right-toolbar-root {
+    top: auto !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    height: 54px;
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .right-toolbar-dock {
+    width: 100% !important;
+    height: 54px !important;
+    min-height: 54px;
+    flex-direction: row !important;
+    justify-content: flex-start !important;
+    overflow: hidden !important;
+    padding: 6px 8px !important;
+    gap: 4px !important;
+    scrollbar-width: none;
+  }
+
+  .right-toolbar-dock button {
+    flex: 0 0 30px;
+    width: 30px !important;
+    height: 30px !important;
+  }
+
+  .right-toolbar-dock > div {
+    flex: 0 0 8px !important;
+    width: 8px !important;
+    margin: 0 !important;
+  }
+
+  .right-toolbar-drawer {
+    position: absolute;
+    right: 8px;
+    bottom: calc(100% + 8px);
+    width: min(390px, calc(100vw - 16px)) !important;
+    height: min(68dvh, 620px) !important;
+    max-height: calc(100dvh - 90px);
+    padding: 12px !important;
+    border: 1px solid rgba(56, 189, 248, 0.3) !important;
+    border-radius: 14px;
+  }
+
+  .weather-chip {
+    top: 112px;
+    bottom: auto !important;
+    left: auto;
+    right: 8px;
+    max-width: min(360px, calc(100vw - 376px));
+    width: max-content;
+  }
+
+  .reservoir-inspector-panel > div:first-child {
+    padding: 7px 10px !important;
+  }
+
+  .reservoir-inspector-panel > div:nth-child(2) {
+    padding: 8px 10px !important;
+    gap: 6px !important;
+  }
+
+  .reservoir-inspector-panel [style*="font-size: 13px"] {
+    font-size: 11px !important;
+  }
+
+  .reservoir-inspector-panel [style*="font-size: 11px"] {
+    font-size: 10px !important;
+  }
+
+  .reservoir-inspector-panel [style*="font-size: 22px"],
+  .reservoir-inspector-panel [style*="font-size: 24px"] {
+    font-size: 18px !important;
+  }
+
+  .weather-chip > span:nth-of-type(1) {
+    font-size: 22px !important;
+  }
+}
+
+/* Compact phone portrait layouts */
+@media (max-width: 520px) {
+  .view-preset-controls {
+    top: 58px !important;
+    max-width: calc(100vw - 16px);
+  }
+
+  .scene-navigation-controls {
+    top: 60px !important;
+    right: 8px !important;
+    transform: scale(0.88);
+    transform-origin: top right;
+  }
+
+  .scene-actions,
+  .scene-actions.drawer-open {
+    top: 12px !important;
+    right: 54px !important;
+    transform: scale(0.9);
+    transform-origin: top right;
+  }
+
+  .depth-bathymetry-action {
+    padding: 0 7px !important;
+  }
+
+  .depth-bathymetry-action span {
+    font-size: 9px;
+  }
+
+  .reservoir-inspector-panel {
+    top: 98px !important;
+    bottom: auto !important;
+    left: 8px !important;
+    width: calc(100vw - 16px) !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .reservoir-inspector-panel > div:first-child {
+    padding: 6px 8px !important;
+  }
+
+  .reservoir-inspector-panel > div:nth-child(2) {
+    padding: 7px 8px !important;
+    gap: 5px !important;
+  }
+
+  .reservoir-inspector-panel [style*="font-size: 13px"] {
+    font-size: 10px !important;
+  }
+
+  .reservoir-inspector-panel [style*="font-size: 11px"] {
+    font-size: 9px !important;
+  }
+
+  .reservoir-inspector-panel [style*="font-size: 22px"],
+  .reservoir-inspector-panel [style*="font-size: 24px"] {
+    font-size: 16px !important;
+  }
+
+  .bottom-control-dock {
+    width: calc(100vw - 16px) !important;
+    left: 8px !important;
+  }
+
+  .water-depth-summary {
+    max-width: calc(100vw - 32px);
+    overflow: visible !important;
+  }
+
+  .weather-chip {
+    top: auto;
+    bottom: 150px !important;
+    left: 8px;
+    right: 8px;
+    max-width: calc(100vw - 16px);
+    width: auto;
+    padding: 6px 8px !important;
+    gap: 6px !important;
+  }
+
+  .weather-chip > span:nth-of-type(1) {
+    font-size: 18px !important;
+  }
+
+  .silt-timeline > div:first-child,
+  .silt-timeline > div:nth-child(2) {
+    flex-wrap: wrap;
+  }
+
+  .silt-timeline > div:nth-child(2) > div {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    min-width: 0;
+  }
+
+  .right-toolbar-drawer {
+    right: 8px;
+    width: calc(100vw - 16px) !important;
+    height: min(68dvh, 620px) !important;
+  }
+
+  .inspector-coordinate-row {
+    align-items: flex-start !important;
+    flex-direction: column;
+    gap: 2px !important;
+  }
+
+  .inspector-coordinate-row > * {
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+
+  .silt-timeline button {
+    font-size: 9px !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .right-toolbar-dock button {
+    flex-basis: 26px;
+    width: 26px !important;
+    height: 28px !important;
+  }
+
+  .right-toolbar-dock {
+    gap: 2px !important;
+    padding: 4px !important;
+  }
+
+  .depth-bathymetry-action span {
+    display: none;
+  }
+}
+
+/* Short landscape windows and laptop displays */
+@media (max-height: 650px) {
+  .reservoir-inspector-panel {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .right-toolbar-drawer {
+    height: calc(100dvh - 32px) !important;
+  }
+
+  .bottom-control-dock {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+}
+
 /* Tooltip styles */
 [data-tooltip] {
   position: relative;

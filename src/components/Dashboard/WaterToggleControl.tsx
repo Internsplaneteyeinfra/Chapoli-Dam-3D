@@ -106,6 +106,7 @@ export const WaterToggleControl: React.FC<WaterToggleControlProps> = ({
 
   return (
     <div
+      className={docked ? 'water-control-row water-control-docked' : 'water-control-row'}
       style={{
         ...placement,
         zIndex: 40,
@@ -126,6 +127,7 @@ export const WaterToggleControl: React.FC<WaterToggleControlProps> = ({
 
       {visible && (
         <div
+          className="water-depth-summary"
           style={{
             background: 'rgba(8, 15, 30, 0.90)',
             backdropFilter: 'blur(16px)',

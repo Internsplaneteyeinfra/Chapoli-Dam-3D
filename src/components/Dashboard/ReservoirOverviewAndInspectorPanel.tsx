@@ -144,6 +144,7 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
 
   return (
     <div
+      className="reservoir-inspector-panel"
       style={{
         position: 'absolute',
         top: 140,
@@ -272,13 +273,13 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
               <>
                 {/* Coordinates */}
                 {!siltVisible && <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+                  <div className="inspector-coordinate-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontSize: 11, fontWeight: 500, color: '#cbd5e1', whiteSpace: 'nowrap' }}>GPS Location (decimal degrees):</span>
                     <strong style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, color: '#f8fafc', letterSpacing: 0, whiteSpace: 'nowrap' }}>
                       {GeoTransform.toDD(inspection.lat, true)}, {GeoTransform.toDD(inspection.lon, false)}
                     </strong>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+                  <div className="inspector-coordinate-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontSize: 11, fontWeight: 500, color: '#cbd5e1', whiteSpace: 'nowrap' }}>Map Grid (UTM 43N):</span>
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, color: '#93c5fd', whiteSpace: 'nowrap' }}>
                       E {inspection.easting.toLocaleString()} m, N {inspection.northing.toLocaleString()} m

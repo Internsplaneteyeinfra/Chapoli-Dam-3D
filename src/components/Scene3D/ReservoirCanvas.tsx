@@ -949,6 +949,7 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
     >
       {/* 3D Navigation Controls Stack (Compass + Zoom) */}
       <div
+        className={`scene-navigation-controls${navigationRightOffset > 100 ? ' drawer-open' : ''}`}
         style={{
           position: 'absolute',
           top: 20,
@@ -1109,6 +1110,7 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
 
       {/* Viewport Presets Control HUD */}
       <div
+        className="view-preset-controls"
         style={{
           position: 'absolute',
           top: 82,

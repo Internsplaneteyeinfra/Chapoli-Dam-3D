@@ -54,7 +54,7 @@ export const SiltTimelineControl: React.FC<SiltTimelineControlProps> = ({
 
   if (!siltVisible) {
     return (
-      <div style={placement}>
+      <div className="silt-timeline" style={placement}>
         <button
           className="btn-amber"
           onClick={() => onToggleSiltVisible(true)}
@@ -80,6 +80,7 @@ export const SiltTimelineControl: React.FC<SiltTimelineControlProps> = ({
 
   return (
     <div
+      className="silt-timeline"
       style={{
         ...placement,
         width: isExpanded ? (docked ? '100%' : 'min(94%, 780px)') : 'auto',
