@@ -64,6 +64,7 @@ export interface ReservoirCanvasProps {
   permanentWaterDepthScale?: number;
   viewPresetTrigger?: { preset: 'perspective' | 'top' | 'depth' | 'side' | 'reset' | 'section'; timestamp: number } | null;
   navigationRightOffset?: number;
+  onWeatherLoaded?: (weather: LiveWeather) => void;
 }
 
 // Home view shown on load, by Perspective and by Reset: elevated from the west,
@@ -110,7 +111,8 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
   permanentWaterLevel = 38.25,
   permanentWaterDepthScale = 3,
   viewPresetTrigger,
-  navigationRightOffset = 70
+  navigationRightOffset = 70,
+  onWeatherLoaded
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -528,6 +530,7 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
       if (cancelled) return;
       weather = w;
       setLiveWeather(w);
+      onWeatherLoaded?.(w);
       weatherFxRef.current?.setWeather(w);
       const drift = weatherFxRef.current?.windVector;
       if (drift) skyRef.current?.setWind(drift.x, drift.y);

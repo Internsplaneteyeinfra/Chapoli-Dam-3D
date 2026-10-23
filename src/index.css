@@ -754,6 +754,261 @@ input[type="range"]::-webkit-slider-thumb:hover {
   .silt-timeline button {
     font-size: 9px !important;
   }
+
+  /* Compact mobile layout: top navigation, map controls at the edge, and a clear bottom stack. */
+  .app-logo {
+    top: 3px !important;
+    left: 6px !important;
+    width: 76px !important;
+    height: 42px !important;
+  }
+
+  .scene-actions,
+  .scene-actions.drawer-open {
+    top: 6px !important;
+    right: 8px !important;
+    gap: 4px !important;
+    transform: none !important;
+  }
+
+  .scene-actions button {
+    height: 30px !important;
+    padding: 0 7px !important;
+    font-size: 9px !important;
+  }
+
+  .depth-bathymetry-action span {
+    display: inline !important;
+    font-size: 8px !important;
+  }
+
+  .export-action span {
+    display: none;
+  }
+
+  .export-action {
+    width: 32px !important;
+    min-width: 32px !important;
+    justify-content: center !important;
+  }
+
+  .view-preset-controls {
+    top: 48px !important;
+    left: 6px !important;
+    width: calc(100vw - 12px) !important;
+    max-width: none !important;
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 2px !important;
+    padding: 3px !important;
+    box-sizing: border-box;
+  }
+
+  .view-preset-controls button {
+    min-width: 0;
+    padding: 5px 2px !important;
+    font-size: 8px !important;
+    white-space: nowrap;
+  }
+
+  .reservoir-inspector-panel {
+    top: 88px !important;
+    left: 6px !important;
+    width: calc(100vw - 12px) !important;
+    z-index: 44 !important;
+  }
+
+  .reservoir-inspector-panel h3 {
+    font-size: 13px !important;
+  }
+
+  .reservoir-inspector-panel > div:first-child > div:first-child > div:nth-child(2) > span {
+    font-size: 9px !important;
+  }
+
+  .reservoir-inspector-panel > div:first-child {
+    padding: 6px 8px !important;
+  }
+
+  .reservoir-inspector-panel > div:first-child > div:first-child {
+    gap: 6px !important;
+    min-width: 0;
+  }
+
+  .reservoir-inspector-panel > div:first-child > div:first-child > div:nth-child(2) {
+    min-width: 0;
+  }
+
+  .reservoir-inspector-panel > div:first-child button {
+    padding: 4px !important;
+  }
+
+  .reservoir-inspector-panel > div:nth-child(2) {
+    padding: 7px 8px !important;
+    gap: 5px !important;
+  }
+
+  .scene-navigation-controls {
+    top: 38% !important;
+    right: 5px !important;
+    transform: scale(0.72);
+    transform-origin: top right;
+    z-index: 39 !important;
+  }
+
+  .weather-chip {
+    top: auto !important;
+    right: 8px !important;
+    bottom: clamp(170px, 26vh, 190px) !important;
+    left: 8px !important;
+    width: auto !important;
+    max-width: none !important;
+    display: grid !important;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 3px 6px !important;
+    padding: 5px 7px !important;
+    font-size: 9px !important;
+    box-sizing: border-box;
+  }
+
+  .weather-chip > span:nth-of-type(1) {
+    font-size: 20px !important;
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .weather-chip .weather-details {
+    grid-column: 3;
+    grid-row: 1;
+    font-size: 8px !important;
+    min-width: 0;
+  }
+
+  .weather-chip .weather-next-hour {
+    font-size: 8px !important;
+    line-height: 1.2;
+  }
+
+  .weather-chip > span:last-child {
+    grid-column: 4;
+    grid-row: 1;
+    justify-content: flex-start !important;
+    border-left: 1px solid rgba(255, 255, 255, 0.18) !important;
+    border-top: 0 !important;
+    padding: 0 0 0 6px !important;
+    font-size: 8px !important;
+    align-self: stretch;
+  }
+
+  .weather-chip > span:last-child svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .weather-chip .weather-next-hour {
+    font-size: 8px !important;
+    line-height: 1.2;
+    margin-top: 1px;
+  }
+
+  .bottom-control-dock {
+    position: fixed !important;
+    left: 6px !important;
+    right: 6px !important;
+    bottom: 58px !important;
+    width: auto !important;
+    transform: none !important;
+    z-index: 60 !important;
+    align-items: stretch !important;
+    gap: 4px !important;
+  }
+
+  .bottom-control-dock > div {
+    width: 100% !important;
+  }
+
+  .water-control-docked {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    gap: 4px !important;
+  }
+
+  .water-control-docked > button {
+    padding: 5px 7px !important;
+    gap: 4px !important;
+    font-size: 9px !important;
+  }
+
+  .water-control-docked > button svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .water-control-docked .water-depth-summary {
+    order: 4;
+    flex: 1 0 100%;
+    padding: 4px 6px !important;
+    gap: 4px 6px !important;
+    border-radius: 8px !important;
+    font-size: 9px !important;
+  }
+
+  .water-control-docked .water-depth-summary > div:not(:first-child) {
+    margin-left: 0 !important;
+  }
+
+  .water-control-docked .water-depth-summary > div[title*="Relative water depth"] {
+    width: 62px !important;
+  }
+
+  .water-control-docked .water-depth-summary button {
+    padding: 2px 4px !important;
+    font-size: 8px !important;
+  }
+
+  .silt-timeline {
+    padding: 6px !important;
+    border-radius: 9px !important;
+  }
+
+  .silt-timeline > div:first-child {
+    gap: 4px !important;
+  }
+
+  .silt-timeline > div:first-child > div:first-child {
+    display: none !important;
+  }
+
+  .silt-timeline > div:nth-child(2) > div {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 3px !important;
+  }
+
+  .right-toolbar-root {
+    height: 46px !important;
+  }
+
+  .right-toolbar-dock {
+    height: 46px !important;
+    min-height: 46px !important;
+    justify-content: space-around !important;
+    gap: 2px !important;
+    padding: 4px 5px !important;
+  }
+
+  .right-toolbar-dock button {
+    flex: 0 1 28px !important;
+    width: 28px !important;
+    height: 28px !important;
+    padding: 3px !important;
+  }
+
+  .right-toolbar-dock button svg {
+    width: 16px;
+    height: 16px;
+  }
 }
 
 @media (max-width: 380px) {
