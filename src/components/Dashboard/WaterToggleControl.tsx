@@ -39,7 +39,7 @@ const TogglePill: React.FC<TogglePillProps> = ({ label, on, onToggle, icon, acce
 );
 
 interface WaterToggleControlProps {
-  waterDepthData: WaterDepthPayload;
+  waterDepthData?: WaterDepthPayload;
   visible: boolean;
   onToggle: (visible: boolean) => void;
   /** Optional silt ON/OFF pill shown beside the water pill */
@@ -53,6 +53,8 @@ interface WaterToggleControlProps {
   /** Water body depth exaggeration and its one-click presets */
   depthScale?: number;
   onDepthScale?: (scale: number) => void;
+  /** Water-spread area shown when there is no satellite depth layer */
+  areaHa?: number;
   /** Rendered inside a parent bottom dock instead of positioning itself */
   docked?: boolean;
 }
@@ -68,9 +70,11 @@ export const WaterToggleControl: React.FC<WaterToggleControlProps> = ({
   surfaceLevel,
   depthScale,
   onDepthScale,
+  areaHa,
   docked = false
 }) => {
-  const { water, depth } = waterDepthData;
+  const water = waterDepthData?.water;
+  const depth = waterDepthData?.depth;
 
   const placement: React.CSSProperties = docked
     ? { position: 'relative' }
@@ -125,7 +129,7 @@ export const WaterToggleControl: React.FC<WaterToggleControlProps> = ({
         glow="rgba(56, 189, 248, 0.4)"
       />
 
-      {visible && (
+      {visible && water && depth && (
         <div
           className="water-depth-summary"
           style={{
@@ -167,6 +171,36 @@ export const WaterToggleControl: React.FC<WaterToggleControlProps> = ({
             </span>
           )}
           {depthSelector}
+        </div>
+      )}
+
+      {visible && !waterDepthData && (
+        <div
+          style={{
+            background: 'rgba(8, 15, 30, 0.90)',
+            backdropFilter: 'blur(16px)',
+            border: '1px solid rgba(56, 189, 248, 0.35)',
+            borderRadius: 10,
+            padding: '6px 12px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.65)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            fontSize: 11,
+            color: 'var(--text-secondary)',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          {areaHa !== undefined && (
+            <span>
+              Outline <strong style={{ color: '#38bdf8' }}>{areaHa.toFixed(1)} ha</strong>
+            </span>
+          )}
+          {surfaceLevel !== undefined && (
+            <span>
+              Level <strong style={{ color: '#e2e8f0' }}>{surfaceLevel.toFixed(2)} m</strong>
+            </span>
+          )}
         </div>
       )}
 

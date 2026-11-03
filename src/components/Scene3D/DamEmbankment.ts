@@ -11,7 +11,7 @@ export interface DamEmbankmentOptions {
 export class DamEmbankment {
   public group: THREE.Group;
   private data: ChapoliData;
-  private damGeom: DamGeometry;
+  private damGeom!: DamGeometry;
   private options: DamEmbankmentOptions;
   private engine: SedimentAnalysisEngine;
 
@@ -29,34 +29,19 @@ export class DamEmbankment {
     this.group = new THREE.Group();
     this.group.name = 'DamEmbankmentStructure';
 
-    // Use verified geometry from Goa WRD or fallback defaults
-    this.damGeom = data.dam_geometry || {
-      name: 'Chapoli Earthen Dam',
-      type: 'Earthen dam with ungated chute spillway',
-      topOfDam_m: 41.00,
-      crestLength_m: 760.0,
-      calculatedCrestLength_m: 764.8,
-      crestWidth_m: 6.0,
-      structuralHeight_m: 25.50,
-      deepestBedLevel_m: 15.50,
-      spillwayCrest_m: 38.25,
-      spillwayType: 'Chute un-gated type',
-      maxHeadOverSpillway_m: 0.50,
-      maxWaterLevel_m: 38.75,
-      fullReservoirLevel_m: 38.25,
-      minDrawdownLevel_m: 22.00,
-      northAbutmentLocal: [-468.0, -411.6],
-      southAbutmentLocal: [-389.8, 353.2],
-      upstreamSlope: 2.5,
-      downstreamSlope: 2.0,
-      status: 'VERIFIED_OFFICIAL_WRD'
-    };
+    if (!data.dam_geometry) {
+      this.group.visible = false;
+      return;
+    }
+
+    this.damGeom = data.dam_geometry;
 
     this.buildDam();
     this.group.visible = this.options.visible;
   }
 
   public buildDam() {
+    if (!this.data.dam_geometry) return;
     // Clear previous objects
     while (this.group.children.length > 0) {
       const obj = this.group.children[0];

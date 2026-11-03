@@ -91,6 +91,8 @@ interface RightVerticalToolbarProps {
   onOpenImport?: () => void;
   treesVisible?: boolean;
   setTreesVisible?: (v: boolean) => void;
+  showF30?: boolean;
+  siltAvailable?: boolean;
 }
 
 export const RightVerticalToolbar: React.FC<RightVerticalToolbarProps> = ({
@@ -151,7 +153,9 @@ export const RightVerticalToolbar: React.FC<RightVerticalToolbarProps> = ({
   onOpenExport,
   onOpenImport,
   treesVisible = true,
-  setTreesVisible
+  setTreesVisible,
+  showF30 = true,
+  siltAvailable = true
 }) => {
   const toggleTab = (tab: RightToolbarTab) => {
     setActiveTab(activeTab === tab ? null : tab);
@@ -316,7 +320,7 @@ export const RightVerticalToolbar: React.FC<RightVerticalToolbarProps> = ({
           )}
 
           {/* Tab 3: Sediment & Silt */}
-          {activeTab === 'sediment' && (
+          {activeTab === 'sediment' && siltAvailable && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {/* Active Month Stats Card */}
               <div
@@ -474,6 +478,12 @@ export const RightVerticalToolbar: React.FC<RightVerticalToolbarProps> = ({
             </div>
           )}
 
+          {activeTab === 'sediment' && !siltAvailable && (
+            <p style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--text-secondary)', margin: 0 }}>
+              Sentinel-2 silt layers are part of the Chapoli survey. Varthur Lake shows the terrain and the lake surface from the supplied outline.
+            </p>
+          )}
+
           {/* Tab 4: Simulation */}
           {activeTab === 'simulation' && (
             <WaterLevelControl
@@ -481,7 +491,8 @@ export const RightVerticalToolbar: React.FC<RightVerticalToolbarProps> = ({
               onWaterLevelChange={setWaterLevel}
               submergedAreaHa={submergedAreaHa}
               submergedVolumeMCM={submergedVolumeMCM}
-              liveLevel={liveTelemetry?.reportedLevel_m ?? 35.47}
+              liveLevel={liveTelemetry?.reportedLevel_m ?? specs.frl_m}
+              specs={specs}
             />
           )}
 
@@ -528,6 +539,7 @@ export const RightVerticalToolbar: React.FC<RightVerticalToolbarProps> = ({
               siltTimeline={siltSeriesData.timeline}
               treesVisible={treesVisible}
               setTreesVisible={setTreesVisible}
+              showF30={showF30}
             />
           )}
 
@@ -675,6 +687,7 @@ export const RightVerticalToolbar: React.FC<RightVerticalToolbarProps> = ({
         <div style={{ width: 24, height: 1, background: 'rgba(255, 255, 255, 0.1)', margin: '4px 0' }} />
 
         {/* Quick Modal Direct Triggers */}
+        {specs.topOfDam_m !== undefined && (
         <button
           onClick={onOpenDamProfile}
           title="Dam Elevation Profile & Caliper"
@@ -694,6 +707,7 @@ export const RightVerticalToolbar: React.FC<RightVerticalToolbarProps> = ({
         >
           <Compass size={18} />
         </button>
+        )}
 
         <button
           onClick={onOpenCrossSection}

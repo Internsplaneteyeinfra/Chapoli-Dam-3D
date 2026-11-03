@@ -147,7 +147,7 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
       className="reservoir-inspector-panel"
       style={{
         position: 'absolute',
-        top: 140,
+        top: 212,
         left: 20,
         width: 400,
         zIndex: 40,
@@ -217,7 +217,7 @@ export const ReservoirOverviewAndInspectorPanel: React.FC<ReservoirOverviewAndIn
                 {inspection ? (siltVisible ? (siltVisualMode === 'classification' ? 'Silt Classification' : 'Silt Volume') : 'Point & Bed Inspection') : 'Reservoir Basin Overview'}
               </h3>
               <span style={{ fontSize: 11, color: '#94a3b8' }}>
-                {inspection ? (siltVisible ? (siltVisualMode === 'classification' ? 'Class and basin share at selected point' : 'Volume at selected point') : 'Selected point values') : 'Chapoli M.I. Tank (Goa WRD)'}
+                {inspection ? (siltVisible ? (siltVisualMode === 'classification' ? 'Class and basin share at selected point' : 'Volume at selected point') : 'Selected point values') : `${specs.reservoirName}${specs.location ? ` · ${specs.location}` : ''}`}
               </span>
             </div>
           </div>

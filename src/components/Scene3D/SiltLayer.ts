@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ChapoliData } from '../../types/reservoir';
 import { SiltSeriesPayload, SiltVisualMode, SiltMonthRecord } from '../../types/silt';
+import { elevationToSceneY, verticalDatumOf } from '../../utils/coordinates';
 
 export interface SiltLayerOptions {
   visible: boolean;
@@ -150,7 +151,11 @@ export class SiltLayer {
       const u = Math.max(0.0, Math.min(1.0, (lx - bbox.minX) / bbox.width));
       const v = Math.max(0.0, Math.min(1.0, 1.0 - (lz - bbox.minZ) / bbox.depth));
 
-      const y = this.depositTop(bedElev, thick) * this.options.verticalExaggeration;
+      const y = elevationToSceneY(
+        this.depositTop(bedElev, thick),
+        this.options.verticalExaggeration,
+        verticalDatumOf(this.data.dem)
+      );
 
       vertices.push(lx, y, lz);
       uvs.push(u, v);
@@ -283,6 +288,7 @@ export class SiltLayer {
 
     const pos = this.mesh.geometry.attributes.position;
     const ex = this.options.verticalExaggeration;
+    const datum = verticalDatumOf(this.data.dem);
     const positions: number[] = [];
     const colors: number[] = [];
 
@@ -296,8 +302,8 @@ export class SiltLayer {
     for (const { a, b, cls } of this.boundaryEdges) {
       const ax = pos.getX(a), az = pos.getZ(a), ay = pos.getY(a);
       const bx = pos.getX(b), bz = pos.getZ(b), by = pos.getY(b);
-      const aBot = this.baseBedElevations[a] * ex;
-      const bBot = this.baseBedElevations[b] * ex;
+      const aBot = elevationToSceneY(this.baseBedElevations[a], ex, datum);
+      const bBot = elevationToSceneY(this.baseBedElevations[b], ex, datum);
       const top = colorFor(cls, (this.baseThicknesses[a] + this.baseThicknesses[b]) / 2);
       const bot = top.clone().multiplyScalar(0.55);
       const quad: [number, number, number, THREE.Color][] = [
@@ -401,10 +407,15 @@ export class SiltLayer {
     const posAttr = this.mesh.geometry.attributes.position;
     const count = posAttr.count;
 
+    const datum = verticalDatumOf(this.data.dem);
     for (let i = 0; i < count; i++) {
       const bedElev = this.baseBedElevations[i];
       const thick = this.baseThicknesses[i];
-      const y = this.depositTop(bedElev, thick) * this.options.verticalExaggeration;
+      const y = elevationToSceneY(
+        this.depositTop(bedElev, thick),
+        this.options.verticalExaggeration,
+        datum
+      );
       posAttr.setY(i, y);
     }
     posAttr.needsUpdate = true;

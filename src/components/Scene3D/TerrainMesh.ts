@@ -104,7 +104,7 @@ export class TerrainMesh {
     const scaledVertices = new Float32Array(activeBase.length);
     for (let i = 0; i < activeBase.length; i += 3) {
       scaledVertices[i] = activeBase[i]; // X
-      scaledVertices[i + 1] = activeBase[i + 1] * this.options.verticalExaggeration; // Y
+      scaledVertices[i + 1] = this.toSceneY(activeBase[i + 1]); // Y
       scaledVertices[i + 2] = activeBase[i + 2]; // Z
     }
 
@@ -195,7 +195,30 @@ export class TerrainMesh {
     this.addBoundaryOutline();
   }
 
+  /** Elevation in metres MSL to a scene height. Datum 0 keeps Chapoli identical. */
+  private toSceneY(elevation: number, exaggeration = this.options.verticalExaggeration): number {
+    return (elevation - (this.data.dem.verticalDatum_m ?? 0)) * exaggeration;
+  }
+
+  private shoreHeight(exaggeration = this.options.verticalExaggeration): number {
+    return this.toSceneY(this.data.baseline_specs.frl_m, exaggeration) + 0.15;
+  }
+
   private getVegetationColor(val: number): [number, number, number] {
+    if (this.data.dem.minElevation > 400) {
+      const span = Math.max(1, this.data.dem.maxElevation - this.data.dem.minElevation);
+      const t = Math.max(0, Math.min(1, (val - this.data.dem.minElevation) / span));
+      if (t < 0.35) {
+        const u = t / 0.35;
+        return [0.22 - 0.04 * u, 0.48 - 0.02 * u, 0.20 - 0.02 * u];
+      }
+      if (t < 0.72) {
+        const u = (t - 0.35) / 0.37;
+        return [0.18 - 0.04 * u, 0.46 - 0.08 * u, 0.18 - 0.02 * u];
+      }
+      const u = (t - 0.72) / 0.28;
+      return [0.16 + 0.18 * u, 0.38 - 0.02 * u, 0.16 + 0.08 * u];
+    }
     if (val <= 35.0) {
       // Downstream lush river valley, riparian grass, palm groves
       const t = Math.max(0.0, Math.min(1.0, (val - 15.0) / 20.0));
@@ -216,6 +239,19 @@ export class TerrainMesh {
   }
 
   private getGeologicalBedColor(val: number): [number, number, number] {
+    if (this.data.dem.minElevation > 400) {
+      const depth = this.data.baseline_specs.frl_m - val;
+      if (depth >= 3) return [0.24, 0.26, 0.28];
+      if (depth >= 1.2) {
+        const t = (depth - 1.2) / 1.8;
+        return [0.40 - 0.10 * t, 0.36 - 0.08 * t, 0.30 - 0.02 * t];
+      }
+      if (depth > 0) {
+        const t = depth / 1.2;
+        return [0.48 - 0.08 * t, 0.42 - 0.06 * t, 0.32 - 0.02 * t];
+      }
+      return [0.30, 0.46, 0.22];
+    }
     if (val <= 22.0) {
       // Deepest thalweg bedrock & gorge channel slate silt
       const t = Math.max(0.0, Math.min(1.0, (val - 15.5) / 6.5));
@@ -238,8 +274,7 @@ export class TerrainMesh {
     const coords = this.data.tank.coords_local;
     const pts: THREE.Vector3[] = [];
     for (const [x, z] of coords) {
-      // Shoreline sits at FRL (38.25m)
-      pts.push(new THREE.Vector3(x, 38.25 * this.options.verticalExaggeration + 0.15, z));
+      pts.push(new THREE.Vector3(x, this.shoreHeight(), z));
     }
     const boundaryGeo = new THREE.BufferGeometry().setFromPoints(pts);
     const boundaryMat = new THREE.LineBasicMaterial({
@@ -261,7 +296,7 @@ export class TerrainMesh {
     const count = posAttrTerrain.count;
     for (let i = 0; i < count; i++) {
       const baseY = this.basePositions[i * 3 + 1];
-      posAttrTerrain.setY(i, baseY * exaggeration);
+      posAttrTerrain.setY(i, this.toSceneY(baseY, exaggeration));
     }
     posAttrTerrain.needsUpdate = true;
     this.terrainGeometry.computeVertexNormals();
@@ -275,7 +310,7 @@ export class TerrainMesh {
       const shorelinePositions = shoreline.geometry.attributes.position;
       const countS = shorelinePositions.count;
       for (let i = 0; i < countS; i++) {
-        shorelinePositions.setY(i, 38.25 * exaggeration + 0.15);
+        shorelinePositions.setY(i, this.shoreHeight(exaggeration));
       }
       shorelinePositions.needsUpdate = true;
     }
@@ -355,7 +390,7 @@ export class TerrainMesh {
       posAttrBed.setXYZ(
         i,
         this.basePositions[i * 3],
-        this.bedElevation(i) * this.options.verticalExaggeration,
+        this.toSceneY(this.bedElevation(i)),
         this.basePositions[i * 3 + 2]
       );
     }
@@ -418,7 +453,7 @@ export class TerrainMesh {
     const count = posAttrTerrain.count;
 
     for (let i = 0; i < count; i++) {
-      const y = activeBase[i * 3 + 1] * this.options.verticalExaggeration;
+      const y = this.toSceneY(activeBase[i * 3 + 1]);
       posAttrTerrain.setXYZ(i, activeBase[i * 3], y, activeBase[i * 3 + 2]);
     }
 

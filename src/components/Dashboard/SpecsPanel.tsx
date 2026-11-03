@@ -29,17 +29,18 @@ const Section: React.FC<{ icon: React.ReactNode; title: string; children: React.
 /** Key facts only: dam depth and current water conditions. */
 export const SpecsPanel: React.FC<SpecsPanelProps> = ({ specs, liveTelemetry, waterDepthData }) => {
   const deepestBed = specs.deepestBedLevel_m ?? 15.5;
-  const topOfDam = specs.topOfDam_m ?? 41.0;
+  const hasDam = specs.topOfDam_m !== undefined;
+  const topOfDam = specs.topOfDam_m ?? deepestBed;
   const liveLevel = liveTelemetry?.reportedLevel_m;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <Section icon={<Database size={14} color="var(--accent-cyan)" />} title="Dam depth">
-        <Row label="Top of dam" value={`${topOfDam.toFixed(2)} m`} />
-        <Row label="Full reservoir level" value={`${specs.frl_m.toFixed(2)} m`} color="#38bdf8" />
+      <Section icon={<Database size={14} color="var(--accent-cyan)" />} title={hasDam ? 'Dam depth' : 'Lake'}>
+        {hasDam && <Row label="Top of dam" value={`${topOfDam.toFixed(2)} m`} />}
+        <Row label="Full water level" value={`${specs.frl_m.toFixed(2)} m`} color="#38bdf8" />
         <Row label="Deepest bed" value={`${deepestBed.toFixed(2)} m`} color="#fbbf24" />
-        <Row label="Dam height" value={`${(specs.damHeight_m ?? topOfDam - deepestBed).toFixed(2)} m`} />
-        <Row label="Max depth at FRL" value={`${(specs.frl_m - deepestBed).toFixed(2)} m`} color="#38bdf8" />
+        {hasDam && <Row label="Dam height" value={`${(specs.damHeight_m ?? topOfDam - deepestBed).toFixed(2)} m`} />}
+        <Row label="Max depth at full level" value={`${(specs.frl_m - deepestBed).toFixed(2)} m`} color="#38bdf8" />
       </Section>
 
       <Section icon={<Droplets size={14} color="#38bdf8" />} title="Water now">

@@ -31,15 +31,16 @@ export class TransectLineVisual {
     end: [number, number],
     elevStart: number,
     elevEnd: number,
-    exaggeration: number
+    exaggeration: number,
+    datum = 0
   ) {
     if (this.lineMesh) {
       this.group.remove(this.lineMesh);
       this.lineGeo?.dispose();
     }
 
-    const startV = new THREE.Vector3(start[0], elevStart * exaggeration + 5, start[1]);
-    const endV = new THREE.Vector3(end[0], elevEnd * exaggeration + 5, end[1]);
+    const startV = new THREE.Vector3(start[0], (elevStart - datum) * exaggeration + 5, start[1]);
+    const endV = new THREE.Vector3(end[0], (elevEnd - datum) * exaggeration + 5, end[1]);
 
     this.beaconA.position.copy(startV);
     this.beaconB.position.copy(endV);

@@ -44,6 +44,7 @@ interface LayerControlsProps {
   siltTimeline?: SiltTimelineItem[];
   treesVisible?: boolean;
   setTreesVisible?: (v: boolean) => void;
+  showF30?: boolean;
 }
 
 export const LayerControls: React.FC<LayerControlsProps> = ({
@@ -86,7 +87,8 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
   setSiltThicknessMultiplier,
   siltTimeline = [],
   treesVisible = true,
-  setTreesVisible
+  setTreesVisible,
+  showF30 = true
 }) => {
   return (
     <div className="glass-panel" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -127,7 +129,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
           {setDtmMode && (
             <div style={{ padding: '6px 8px', background: 'rgba(15, 23, 42, 0.6)', borderRadius: 6, display: 'flex', flexDirection: 'column', gap: 5 }}>
               <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Ground model</span>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: showF30 ? '1fr 1fr' : '1fr', gap: 4 }}>
                 <button
                   onClick={() => setDtmMode('bathymetric')}
                   style={{
@@ -145,6 +147,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
                 >
                   Basin (default)
                 </button>
+                {showF30 && (
                 <button
                   onClick={() => setDtmMode('f30_dtm')}
                   style={{
@@ -162,6 +165,7 @@ export const LayerControls: React.FC<LayerControlsProps> = ({
                 >
                   f-30 survey
                 </button>
+                )}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 4 }}>
                 <button

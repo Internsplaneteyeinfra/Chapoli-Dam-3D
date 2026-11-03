@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import rawData from './data/chapoli_data.json';
+import rawVarthur from './data/varthur_data.json';
 import rawSiltData from './data/silt_series.json';
+import rawVarthurSiltData from './data/varthur_silt_series.json';
 import rawWaterDepthData from './data/water_depth.json';
 import { WaterDepthPayload } from './types/waterDepth';
 import { WaterToggleControl } from './components/Dashboard/WaterToggleControl';
@@ -22,6 +24,9 @@ import { ExportReportModal } from './components/Dashboard/ExportReportModal';
 import { DamElevationProfileModal } from './components/Dashboard/DamElevationProfileModal';
 import chapoliLogo from './assets/chapoli-logo.png';
 
+const chapoliSiltData = (rawSiltData as unknown) as SiltSeriesPayload;
+const varthurSiltData = (rawVarthurSiltData as unknown) as SiltSeriesPayload;
+
 const getWeatherEmoji = (weather: LiveWeather | null): string => {
   if (!weather || !weather.ok) return '🌦️';
   if (weather.precipitationMm > 0) {
@@ -35,16 +40,17 @@ const getWeatherEmoji = (weather: LiveWeather | null): string => {
 };
 
 export const App: React.FC = () => {
-  const data = (rawData as unknown) as ChapoliData;
-  const siltData = (rawSiltData as unknown) as SiltSeriesPayload;
+  const [siteId, setSiteId] = useState<'chapoli' | 'varthur'>('chapoli');
+  const data = ((siteId === 'varthur' ? rawVarthur : rawData) as unknown) as ChapoliData;
+  const siltData = siteId === 'varthur' ? varthurSiltData : chapoliSiltData;
   const waterDepthData = (rawWaterDepthData as unknown) as WaterDepthPayload;
   const engine = useMemo(() => new SedimentAnalysisEngine(data), [data]);
   const [liveWeather, setLiveWeather] = useState<LiveWeather | null>(null);
   const [isMobileWeatherOpen, setIsMobileWeatherOpen] = useState<boolean>(false);
 
   useEffect(() => {
-    fetchLiveWeather(15.0244, 74.0453).then(w => setLiveWeather(w)).catch(() => {});
-  }, []);
+    fetchLiveWeather(data.origin.lat, data.origin.lon).then(w => setLiveWeather(w)).catch(() => {});
+  }, [data.origin.lat, data.origin.lon]);
 
   // Operational Simulation State
   const [waterLevel, setWaterLevel] = useState<number>(38.25); // Default to FRL (38.25m)
@@ -84,13 +90,13 @@ export const App: React.FC = () => {
   // One-click cross-section through the middle of the reservoir, viewed square-on from the west
   const SECTION_CUT_X = -40;
   const handleToggleSection = (on: boolean) => {
-    setSectionCutX(on ? SECTION_CUT_X : null);
+    setSectionCutX(on ? (siteId === 'chapoli' ? SECTION_CUT_X : 0) : null);
     handleSelectViewPreset(on ? 'section' : 'perspective');
   };
 
   // Sentinel-2 Silt Classification & Volume Surface Series
   const [siltVisible, setSiltVisible] = useState<boolean>(false); // opens on the water view; Silt pill turns it on
-  const [siltMonth, setSiltMonth] = useState<string>(siltData.activeDefaultMonth); // peak-volume month from the silt series
+  const [siltMonth, setSiltMonth] = useState<string>(chapoliSiltData.activeDefaultMonth); // peak-volume month from the silt series
   const [siltVisualMode, setSiltVisualMode] = useState<SiltVisualMode>('classification');
   const [siltOpacity, setSiltOpacity] = useState<number>(0.85);
   const [siltThicknessMultiplier, setSiltThicknessMultiplier] = useState<number>(1.0);
@@ -102,6 +108,36 @@ export const App: React.FC = () => {
     end: [0, 400]     // South Dam Face
   });
   const [activePresetName, setActivePresetName] = useState<string>('Longitudinal Thalweg (Inflow to Dam)');
+
+  const selectSite = (nextId: 'chapoli' | 'varthur') => {
+    if (nextId === siteId) return;
+    const next = ((nextId === 'varthur' ? rawVarthur : rawData) as unknown) as ChapoliData;
+    const nextSilt = nextId === 'varthur' ? varthurSiltData : chapoliSiltData;
+    setSiteId(nextId);
+    setWaterLevel(nextId === 'chapoli' ? 38.25 : next.baseline_specs.frl_m);
+    setWaterVisible(nextId === 'varthur');
+    setPermanentWaterVisible(nextId === 'chapoli');
+    setDamVisible(nextId === 'chapoli');
+    setTreesVisible(nextId === 'chapoli');
+    setSiltVisible(false);
+    setSiltMonth(nextSilt.activeDefaultMonth);
+    setSiltVisualMode('classification');
+    setSedimentVisible(false);
+    setDtmMode('bathymetric');
+    setSectionCutX(null);
+    setInspectedPoint(null);
+    setSampleMode(false);
+    if (nextId === 'chapoli') {
+      setTransectPoints({ start: [0, -450], end: [0, 400] });
+      setActivePresetName('Longitudinal Thalweg (Inflow to Dam)');
+    } else {
+      const xs = next.tank.coords_local.map(p => p[0]);
+      const zs = next.tank.coords_local.map(p => p[1]);
+      const midX = (Math.min(...xs) + Math.max(...xs)) / 2;
+      setTransectPoints({ start: [midX, Math.min(...zs)], end: [midX, Math.max(...zs)] });
+      setActivePresetName('North to south across Varthur Lake');
+    }
+  };
 
   // Modals
   const [isDamProfileOpen, setIsDamProfileOpen] = useState<boolean>(false);
@@ -222,8 +258,8 @@ export const App: React.FC = () => {
         >
           <style>{'@keyframes depthBathymetryEnter { from { opacity: 0; transform: translateY(8px) scale(0.995); } to { opacity: 1; transform: translateY(0) scale(1); } }'}</style>
           <iframe
-            title="Chapoli Depth Bathymetry"
-            src="/depth-bathymetry.html"
+            title={siteId === 'varthur' ? 'Varthur Depth Bathymetry' : 'Chapoli Depth Bathymetry'}
+            src={siteId === 'varthur' ? '/varthur-depth-bathymetry.html' : '/depth-bathymetry.html'}
             style={{ width: '100%', height: '100%', border: 0, display: 'block' }}
           />
         </div>
@@ -233,15 +269,16 @@ export const App: React.FC = () => {
         {/* Three.js Interactive 3D Canvas */}
         <div className="scene-shell" style={{ flex: 1, height: '100%', position: 'relative' }}>
           <ReservoirCanvas
+            key={siteId}
             data={data}
             waterLevel={waterLevel}
             verticalExaggeration={verticalExaggeration}
             terrainVisible={terrainVisible}
             waterVisible={waterVisible}
-            waterOpacity={waterOpacity}
+            waterOpacity={siltVisible && siteId === 'varthur' ? Math.min(waterOpacity, 0.35) : waterOpacity}
             bedVisible={bedVisible}
-            damVisible={damVisible}
-            treesVisible={treesVisible}
+            damVisible={!!data.dam_geometry && damVisible}
+            treesVisible={siteId === 'chapoli' && treesVisible}
             sedimentVisible={sedimentVisible}
             sedimentOpacity={sedimentOpacity}
             contoursVisible={contoursVisible}
@@ -260,7 +297,7 @@ export const App: React.FC = () => {
             siltVisualMode={siltVisualMode}
             siltOpacity={siltOpacity}
             siltThicknessMultiplier={siltThicknessMultiplier}
-            waterDepthData={waterDepthData}
+            waterDepthData={siteId === 'chapoli' ? waterDepthData : undefined}
             permanentWaterVisible={permanentWaterVisible}
             permanentWaterOpacity={siltVisible ? 0.3 : 0.88} // mostly clear over silt so its colours read from above
             permanentWaterLevel={waterLevel} // live simulated water level, rises and falls with the slider
@@ -268,6 +305,7 @@ export const App: React.FC = () => {
             viewPresetTrigger={viewPresetTrigger}
             navigationRightOffset={activeRightTab ? 450 : 70}
             onWeatherLoaded={setLiveWeather}
+            catchmentTrees={siteId === 'chapoli'}
           />
 
           <img
@@ -286,6 +324,47 @@ export const App: React.FC = () => {
               filter: 'drop-shadow(0 2px 8px rgba(0, 0, 0, 0.65))'
             }}
           />
+
+          <div
+            className="site-selector"
+            style={{
+              position: 'absolute',
+              top: 76,
+              left: 18,
+              zIndex: 48,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+              pointerEvents: 'auto'
+            }}
+          >
+            <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#bae6fd' }}>
+              Site
+            </label>
+            <select
+              value={siteId}
+              onChange={(event) => selectSite(event.target.value as 'chapoli' | 'varthur')}
+              aria-label="Choose a lake"
+              style={{
+                background: 'rgba(8, 14, 28, 0.92)',
+                color: '#f8fafc',
+                border: '1px solid rgba(56, 189, 248, 0.45)',
+                borderRadius: 8,
+                padding: '8px 12px',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.45)',
+                minWidth: 220
+              }}
+            >
+              <option value="chapoli">Chapoli M.I. Tank</option>
+              <option value="varthur">Varthur Lake</option>
+            </select>
+            <span style={{ fontSize: 11, color: '#e2e8f0', textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>
+              {data.tank.area_ha.toFixed(1)} ha · {data.dem.minElevation.toFixed(0)}–{data.dem.maxElevation.toFixed(0)} m
+            </span>
+          </div>
 
           {/* Bottom dock: water on/off toggle above the silt timeline HUD */}
           <div
@@ -306,16 +385,17 @@ export const App: React.FC = () => {
           >
             <div style={{ pointerEvents: 'auto' }}>
               <WaterToggleControl
-                waterDepthData={waterDepthData}
-                visible={permanentWaterVisible}
-                onToggle={setPermanentWaterVisible}
+                waterDepthData={siteId === 'chapoli' ? waterDepthData : undefined}
+                visible={siteId === 'chapoli' ? permanentWaterVisible : waterVisible}
+                onToggle={siteId === 'chapoli' ? setPermanentWaterVisible : setWaterVisible}
                 siltVisible={siltVisible}
                 onToggleSilt={setSiltVisible}
                 sectionOn={sectionCutX !== null}
                 onToggleSection={handleToggleSection}
                 surfaceLevel={waterLevel}
                 depthScale={permanentWaterDepthScale}
-                onDepthScale={setPermanentWaterDepthScale}
+                onDepthScale={siteId === 'chapoli' ? setPermanentWaterDepthScale : undefined}
+                areaHa={data.tank.area_ha}
                 docked
               />
             </div>
@@ -514,7 +594,7 @@ export const App: React.FC = () => {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 6 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontSize: 16 }}>{getWeatherEmoji(liveWeather)}</span>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#e0f2fe' }}>Chapoli Weather</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#e0f2fe' }}>{data.baseline_specs.reservoirName} Weather</span>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: liveWeather.ok ? '#34d399' : '#fbbf24', marginLeft: 4 }}>
                       ● {liveWeather.ok ? 'Live' : 'Offline'}
                     </span>
@@ -599,7 +679,7 @@ export const App: React.FC = () => {
                     </span>
                   )}
                   <span style={{ marginLeft: 'auto', color: '#64748b' }}>
-                    15.0244°N, 74.0453°E
+                    {data.origin.lat.toFixed(4)}°N, {data.origin.lon.toFixed(4)}°E
                   </span>
                 </div>
               </div>
@@ -622,7 +702,7 @@ export const App: React.FC = () => {
           setSampleMode={setSampleMode}
           sedimentStats={sedimentStats}
           siltSeriesData={siltData}
-          waterDepthData={waterDepthData}
+          waterDepthData={siteId === 'chapoli' ? waterDepthData : undefined}
           siltMonth={siltMonth}
           setSiltMonth={setSiltMonth}
           siltVisualMode={siltVisualMode}
@@ -642,7 +722,10 @@ export const App: React.FC = () => {
           bedVisible={bedVisible}
           setBedVisible={setBedVisible}
           damVisible={damVisible}
-          setDamVisible={setDamVisible}
+          setDamVisible={data.dam_geometry ? setDamVisible : undefined}
+          setTreesVisible={siteId === 'chapoli' ? setTreesVisible : undefined}
+          showF30={siteId === 'chapoli'}
+          siltAvailable
           sedimentVisible={sedimentVisible}
           setSedimentVisible={setSedimentVisible}
           sedimentOpacity={sedimentOpacity}
@@ -666,7 +749,6 @@ export const App: React.FC = () => {
           onOpenExport={() => setIsExportModalOpen(true)}
           onOpenImport={() => setIsImportModalOpen(true)}
           treesVisible={treesVisible}
-          setTreesVisible={setTreesVisible}
         />
       </div>
 

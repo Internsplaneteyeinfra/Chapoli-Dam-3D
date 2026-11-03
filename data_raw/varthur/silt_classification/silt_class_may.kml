@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ns0:kml xmlns:ns0="http://www.opengis.net/kml/2.2">
+  <ns0:Document>
+    <ns0:name>Silt Classification — May 2026</ns0:name>
+    <ns0:description>Monthly silt · May 2026
+Sentinel-2 median (SCL + spectral water)
+Water area: 0.86 ha · Mean silt score: 0.3339
+Sediment index P5=-0.0245 · P95=0.1963
+Class % of water area
+
+SILT CLASSIFICATION
+#00FF00  1 = Low Silt
+#FFFF00  2 = Moderate Silt
+#FFA500  3 = High Silt
+#FF0000  4 = Very High Silt</ns0:description>
+    <ns0:GroundOverlay>
+      <ns0:name>May 2026 Silt</ns0:name>
+      <ns0:color>ffffffff</ns0:color>
+      <ns0:Icon>
+        <ns0:href>data:image/png;base64,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</ns0:href>
+      </ns0:Icon>
+      <ns0:LatLonBox>
+        <ns0:north>12.95525905</ns0:north>
+        <ns0:south>12.94473242</ns0:south>
+        <ns0:east>77.74694950</ns0:east>
+        <ns0:west>77.73602436</ns0:west>
+      </ns0:LatLonBox>
+    </ns0:GroundOverlay>
+  </ns0:Document>
+</ns0:kml>

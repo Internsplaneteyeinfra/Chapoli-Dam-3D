@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { Thermometer, Wind, ArrowUp, Droplets, CloudSun, CloudMoon } from 'lucide-react';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { ChapoliData, InspectionResult, DataProvenance, DtmSurfaceMode } from '../../types/reservoir';
-import { GeoTransform } from '../../utils/coordinates';
+import { GeoTransform, elevationToSceneY, sceneYToElevation, verticalDatumOf } from '../../utils/coordinates';
 import { SedimentAnalysisEngine } from '../../utils/sedimentAnalysis';
 import { TerrainMesh } from './TerrainMesh';
 import { WaterSurface } from './WaterSurface';
@@ -65,6 +65,8 @@ export interface ReservoirCanvasProps {
   viewPresetTrigger?: { preset: 'perspective' | 'top' | 'depth' | 'side' | 'reset' | 'section'; timestamp: number } | null;
   navigationRightOffset?: number;
   onWeatherLoaded?: (weather: LiveWeather) => void;
+  /** Western Ghats tree layer. Off for sites that do not have that catchment dataset. */
+  catchmentTrees?: boolean;
 }
 
 // Home view shown on load, by Perspective and by Reset: elevated from the west,
@@ -74,6 +76,21 @@ const HOME_CAMERA_TARGET = new THREE.Vector3(-30, 110, 30);
 
 // Furthest mouse zoom-out (about twice the home view distance, still framing the basin)
 const MAX_ZOOM_OUT_DISTANCE = 2600;
+
+function framedHome(data: ChapoliData, exaggeration: number): { position: THREE.Vector3; target: THREE.Vector3; maxDistance: number } | null {
+  const datum = verticalDatumOf(data.dem);
+  if (!datum) return null;
+  const y = elevationToSceneY(data.baseline_specs.frl_m, exaggeration, datum);
+  const span = Math.max(
+    data.dem.bounds.right - data.dem.bounds.left,
+    data.dem.bounds.top - data.dem.bounds.bottom
+  );
+  return {
+    position: new THREE.Vector3(-span * 0.72, y + span * 0.46, -span * 0.2),
+    target: new THREE.Vector3(0, y, 0),
+    maxDistance: span * 2.6
+  };
+}
 // Live sky refresh from Open-Meteo
 const LIVE_SKY_REFRESH_MS = 15 * 60 * 1000;
 
@@ -112,7 +129,8 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
   permanentWaterDepthScale = 3,
   viewPresetTrigger,
   navigationRightOffset = 70,
-  onWeatherLoaded
+  onWeatherLoaded,
+  catchmentTrees = true
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -175,7 +193,8 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
     const scene = new THREE.Scene();
     // Light haze in the sky's horizon colour (updated by the live sky) so distant terrain stays bright
     scene.background = new THREE.Color(0xbfe0f4);
-    scene.fog = new THREE.FogExp2(0xbfe0f4, 0.00011);
+    const home = framedHome(data, verticalExaggeration);
+    scene.fog = new THREE.FogExp2(0xbfe0f4, home ? 0.00007 : 0.00011);
     sceneRef.current = scene;
 
     const sky = new LiveSky();
@@ -189,8 +208,8 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
 
     // 2. Camera: Elevated three-quarter perspective framing reservoir, surrounding hills and earthen dam
     const camera = new THREE.PerspectiveCamera(40, width / height, 1, 18000);
-    camera.position.copy(HOME_CAMERA_POSITION);
-    camera.lookAt(HOME_CAMERA_TARGET);
+    camera.position.copy(home ? home.position : HOME_CAMERA_POSITION);
+    camera.lookAt(home ? home.target : HOME_CAMERA_TARGET);
     cameraRef.current = camera;
 
     // 3. Renderer with local clipping enabled for Section Cuts
@@ -209,8 +228,8 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
     controls.dampingFactor = 0.05;
     controls.maxPolarAngle = Math.PI / 2 - 0.03; // Keep above ground plane
     controls.minDistance = 50;
-    controls.maxDistance = MAX_ZOOM_OUT_DISTANCE;
-    controls.target.copy(HOME_CAMERA_TARGET);
+    controls.maxDistance = home ? home.maxDistance : MAX_ZOOM_OUT_DISTANCE;
+    controls.target.copy(home ? home.target : HOME_CAMERA_TARGET);
     controlsRef.current = controls;
 
     // 5. Lighting: Sun + Sky Hemisphere + Soft Ambient.
@@ -312,12 +331,15 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
     sectionCapRef.current = sectionCap;
 
     // 6H. Western Ghats Trees & Natural Forest Vegetation
-    const vegetation = new VegetationLayer((rawVegetationData as unknown) as VegetationPayload, {
-      visible: treesVisible,
-      verticalExaggeration
-    });
-    scene.add(vegetation.group);
-    vegetationRef.current = vegetation;
+    let vegetation: VegetationLayer | null = null;
+    if (catchmentTrees) {
+      vegetation = new VegetationLayer((rawVegetationData as unknown) as VegetationPayload, {
+        visible: treesVisible,
+        verticalExaggeration
+      });
+      scene.add(vegetation.group);
+      vegetationRef.current = vegetation;
+    }
 
     const marker = new InspectionMarker();
     scene.add(marker.group);
@@ -389,7 +411,7 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
       sediment.dispose();
       siltRef.current?.dispose();
       permanentWaterRef.current?.dispose();
-      vegetation.dispose();
+      vegetation?.dispose();
       sectionCap.dispose();
       sky.dispose();
       weatherFx.dispose();
@@ -475,9 +497,10 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
           carveBedToWaterBottom(waterDepthData, x, z, baseElev, baseline, permanentWaterDepthScale)
       : null;
     terrainRef.current?.setBedCarve(carve);
-    siltRef.current?.setCapLevel(waterDepthData ? baseline : undefined);
+    // Cap deposits at the operating water surface so they stay under the lake plane
+    siltRef.current?.setCapLevel(permanentWaterLevel ?? baseline);
     siltRef.current?.setBedElevationFn(carve);
-  }, [waterDepthData, data, permanentWaterDepthScale]);
+  }, [waterDepthData, data, permanentWaterDepthScale, permanentWaterLevel]);
 
   // Water side walls clutter the solid silt deposit; show them only while silt is off
   useEffect(() => {
@@ -553,11 +576,12 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
     const terrain = terrainRef.current;
     if (!fx || !terrain) return;
     fx.setSurface((x, z) => {
+      const datum = verticalDatumOf(data.dem);
       if (waterDepthData && permanentWaterVisible && sampleWaterDepth(waterDepthData, x, z) !== null) {
-        return { y: permanentWaterLevel * verticalExaggeration, water: true };
+        return { y: elevationToSceneY(permanentWaterLevel, verticalExaggeration, datum), water: true };
       }
       const elev = terrain.sampleSurfaceElevation(x, z);
-      return elev === null ? null : { y: elev * verticalExaggeration, water: false };
+      return elev === null ? null : { y: elevationToSceneY(elev, verticalExaggeration, datum), water: false };
     });
   }, [waterDepthData, permanentWaterVisible, permanentWaterLevel, permanentWaterDepthScale, verticalExaggeration, dtmMode]);
 
@@ -577,7 +601,8 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
       silt: siltRef.current,
       waterDepthData,
       waterVisible: permanentWaterVisible,
-      waterLevel: permanentWaterLevel
+      waterLevel: permanentWaterLevel,
+      verticalDatum: verticalDatumOf(data.dem)
     });
   }, [sectionCutX, verticalExaggeration, siltVisible, siltMonth, siltVisualMode, siltThicknessMultiplier,
       permanentWaterVisible, permanentWaterLevel, permanentWaterDepthScale, waterDepthData, dtmMode]);
@@ -604,7 +629,8 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
         transectPoints.end,
         elevStart ?? 35,
         elevEnd ?? 35,
-        verticalExaggeration
+        verticalExaggeration,
+        verticalDatumOf(data.dem)
       );
     } else {
       transectVisualRef.current.hide();
@@ -647,7 +673,8 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
       // Preserve the actual clicked surface elevation for dam geometry while
       // continuing through the same coordinate-based inspection pipeline.
       const clickedDam = Boolean(validHit.object.userData?.isDam);
-      const clickedSurfaceElevation = hitPt.y / verticalExaggeration;
+      const datum = verticalDatumOf(data.dem);
+      const clickedSurfaceElevation = sceneYToElevation(hitPt.y, verticalExaggeration, datum);
 
       // Handle Transect Drawing tool
       if (activeTool === 'transect') {
@@ -756,9 +783,12 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
       }
 
       // Update 3D Marker: only draw vertical caliper if submerged with sediment thickness and silt is ON
+      const markerElev = clickedDam || validHit.object.userData?.isSiltLayer
+        ? clickedSurfaceElevation
+        : (presBedElev ?? (verticalDatumOf(data.dem) === 0 ? 34 : data.baseline_specs.frl_m));
       markerRef.current?.setPosition(
         localX,
-        (clickedDam || validHit.object.userData?.isSiltLayer ? hitPt.y / verticalExaggeration : presBedElev ?? 34) * verticalExaggeration,
+        elevationToSceneY(markerElev, verticalExaggeration, verticalDatumOf(data.dem)),
         localZ,
         isSubmerged && sedimentThickness !== null && siltVisible ? origBedElev : null,
         verticalExaggeration
@@ -854,39 +884,80 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
   }, []);
 
   const setTopView = useCallback(() => {
-    smoothTransitionTo(new THREE.Vector3(-80, 1400, -9.8), new THREE.Vector3(-80, 32, -10), 1000);
+    const home = framedHome(data, verticalExaggeration);
+    if (!home) {
+      smoothTransitionTo(new THREE.Vector3(-80, 1400, -9.8), new THREE.Vector3(-80, 32, -10), 1000);
+    } else {
+      smoothTransitionTo(
+        new THREE.Vector3(0, home.target.y + home.maxDistance * 0.42, home.maxDistance * 0.01),
+        home.target.clone(),
+        1000
+      );
+    }
     setActivePreset('top');
-  }, [smoothTransitionTo]);
+  }, [smoothTransitionTo, data, verticalExaggeration]);
 
   const setSideView = useCallback(() => {
-    // Elevated Western Side Profile looking eastward across the 760m Dam Embankment and reservoir basin
-    smoothTransitionTo(new THREE.Vector3(-1050, 200, 0), new THREE.Vector3(-80, 35, 0), 1000);
+    const home = framedHome(data, verticalExaggeration);
+    if (!home) {
+      smoothTransitionTo(new THREE.Vector3(-1050, 200, 0), new THREE.Vector3(-80, 35, 0), 1000);
+    } else {
+      const span = home.maxDistance / 2.6;
+      smoothTransitionTo(new THREE.Vector3(-span * 0.95, home.target.y + span * 0.12, 0), home.target.clone(), 1000);
+    }
     setActivePreset('side');
-  }, [smoothTransitionTo]);
+  }, [smoothTransitionTo, data, verticalExaggeration]);
 
   const setPerspectiveView = useCallback(() => {
-    // Elevated three-quarter perspective framing reservoir, surrounding hills and earthen dam
-    smoothTransitionTo(HOME_CAMERA_POSITION.clone(), HOME_CAMERA_TARGET.clone(), 1000);
+    const home = framedHome(data, verticalExaggeration);
+    smoothTransitionTo(
+      home ? home.position.clone() : HOME_CAMERA_POSITION.clone(),
+      home ? home.target.clone() : HOME_CAMERA_TARGET.clone(),
+      1000
+    );
     setActivePreset('perspective');
-  }, [smoothTransitionTo]);
+  }, [smoothTransitionTo, data, verticalExaggeration]);
 
   const setLowObliqueView = useCallback(() => {
-    // Dam Abutment perspective inspecting the deep intake basin and upstream reservoir pool
-    smoothTransitionTo(new THREE.Vector3(-540, 160, -380), new THREE.Vector3(-200, 25, 40), 1000);
+    const home = framedHome(data, verticalExaggeration);
+    if (!home) {
+      smoothTransitionTo(new THREE.Vector3(-540, 160, -380), new THREE.Vector3(-200, 25, 40), 1000);
+    } else {
+      const span = home.maxDistance / 2.6;
+      smoothTransitionTo(
+        new THREE.Vector3(-span * 0.28, home.target.y + span * 0.08, -span * 0.22),
+        home.target.clone(),
+        1000
+      );
+    }
     setActivePreset('depth');
-  }, [smoothTransitionTo]);
+  }, [smoothTransitionTo, data, verticalExaggeration]);
 
-  // Looking east, square-on to the east-west cut, so the filled section reads like a survey profile
   const setSectionView = useCallback(() => {
     const cut = sectionCutRef.current ?? 0;
-    smoothTransitionTo(new THREE.Vector3(cut - 1250, 330, 60), new THREE.Vector3(cut, 40, 0), 1000);
+    const home = framedHome(data, verticalExaggeration);
+    if (!home) {
+      smoothTransitionTo(new THREE.Vector3(cut - 1250, 330, 60), new THREE.Vector3(cut, 40, 0), 1000);
+    } else {
+      const span = home.maxDistance / 2.6;
+      smoothTransitionTo(
+        new THREE.Vector3(cut - span * 0.85, home.target.y + span * 0.16, span * 0.04),
+        new THREE.Vector3(cut, home.target.y, 0),
+        1000
+      );
+    }
     setActivePreset('side');
-  }, [smoothTransitionTo]);
+  }, [smoothTransitionTo, data, verticalExaggeration]);
 
   const resetNorth = useCallback(() => {
-    smoothTransitionTo(HOME_CAMERA_POSITION.clone(), HOME_CAMERA_TARGET.clone(), 1000);
+    const home = framedHome(data, verticalExaggeration);
+    smoothTransitionTo(
+      home ? home.position.clone() : HOME_CAMERA_POSITION.clone(),
+      home ? home.target.clone() : HOME_CAMERA_TARGET.clone(),
+      1000
+    );
     setActivePreset('perspective');
-  }, [smoothTransitionTo]);
+  }, [smoothTransitionTo, data, verticalExaggeration]);
 
   const zoomIn = useCallback(() => {
     if (!cameraRef.current || !controlsRef.current) return;
@@ -1064,7 +1135,7 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
             alignItems: 'center',
             gap: 10
           }}
-          title="Weather at Chapoli"
+          title={`Weather at ${data.baseline_specs.reservoirName}`}
         >
           <Thermometer size={18} color="#fbbf24" />
           <span style={{ fontSize: 25, fontWeight: 700, color: '#f8fafc', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
@@ -1111,12 +1182,12 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
         </div>
       )}
 
-      {/* Viewport Presets Control HUD */}
+      {/* Viewport Presets Control HUD — below logo + site selector */}
       <div
         className="view-preset-controls"
         style={{
           position: 'absolute',
-          top: 82,
+          top: 168,
           left: 20,
           display: 'flex',
           gap: 4,
@@ -1126,7 +1197,7 @@ export const ReservoirCanvas: React.FC<ReservoirCanvasProps> = ({
           borderRadius: 8,
           border: '1px solid rgba(56, 189, 248, 0.25)',
           backdropFilter: 'blur(12px)',
-          boxShadow: '0 4px 18px rgba(0,0,0,0.5)'
+          boxShadow: '0 4px 18px rgba(0, 0, 0, 0.5)'
         }}
       >
         {[

@@ -6,6 +6,19 @@ proj4.defs('EPSG:32643', '+proj=utm +zone=43 +datum=WGS84 +units=m +no_defs');
 // Fallback definition for legacy references
 proj4.defs('EPSG:32642', '+proj=utm +zone=42 +datum=WGS84 +units=m +no_defs');
 
+/** Metres subtracted from elevations before they are drawn, so a high plateau is not pushed into the sky. */
+export function verticalDatumOf(dem: { verticalDatum_m?: number } | undefined): number {
+  return dem?.verticalDatum_m ?? 0;
+}
+
+export function elevationToSceneY(elevation: number, exaggeration: number, datum: number): number {
+  return (elevation - datum) * exaggeration;
+}
+
+export function sceneYToElevation(sceneY: number, exaggeration: number, datum: number): number {
+  return sceneY / exaggeration + datum;
+}
+
 export class GeoTransform {
   private origin: ReservoirOrigin;
   private crs: string;

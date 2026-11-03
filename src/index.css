@@ -411,7 +411,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
 @media (min-width: 901px) and (max-width: 1450px) {
   .reservoir-inspector-panel {
     left: 12px !important;
-    top: 120px !important;
+    top: 210px !important;
     width: min(340px, calc(100vw - 460px)) !important;
     max-height: none !important;
     overflow: visible !important;
@@ -494,8 +494,13 @@ input[type="range"]::-webkit-slider-thumb:hover {
     height: 54px !important;
   }
 
+  .site-selector {
+    top: 60px !important;
+    left: 8px !important;
+  }
+
   .view-preset-controls {
-    top: 66px !important;
+    top: 148px !important;
     left: 8px !important;
     max-width: calc(100vw - 64px);
     flex-wrap: wrap;
@@ -653,8 +658,13 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 /* Compact phone portrait layouts */
 @media (max-width: 600px) {
+  .site-selector {
+    top: 48px !important;
+    left: 6px !important;
+  }
+
   .view-preset-controls {
-    top: 58px !important;
+    top: 132px !important;
     max-width: calc(100vw - 16px);
   }
 
@@ -795,8 +805,13 @@ input[type="range"]::-webkit-slider-thumb:hover {
     justify-content: center !important;
   }
 
+  .site-selector {
+    top: 46px !important;
+    left: 6px !important;
+  }
+
   .view-preset-controls {
-    top: 48px !important;
+    top: 124px !important;
     left: 6px !important;
     width: calc(100vw - 12px) !important;
     max-width: none !important;

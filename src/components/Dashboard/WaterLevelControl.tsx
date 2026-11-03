@@ -1,5 +1,6 @@
 import React from 'react';
 import { Droplet, AlertTriangle } from 'lucide-react';
+import { BaselineSpecs } from '../../types/reservoir';
 
 interface WaterLevelControlProps {
   waterLevel: number;
@@ -7,6 +8,7 @@ interface WaterLevelControlProps {
   submergedAreaHa: number;
   submergedVolumeMCM: number;
   liveLevel?: number;
+  specs?: BaselineSpecs;
 }
 
 const DEEPEST_BED = 15.5;
@@ -19,18 +21,34 @@ export const WaterLevelControl: React.FC<WaterLevelControlProps> = ({
   onWaterLevelChange,
   submergedAreaHa,
   submergedVolumeMCM,
-  liveLevel = 35.47
+  liveLevel = 35.47,
+  specs
 }) => {
-  const presets = [
-    { label: 'Minimum', level: 22.0, title: 'Lowest level water is drawn down to' },
-    { label: 'Today', level: liveLevel, title: 'Current level from the Goa WRD gauge' },
-    { label: 'Full', level: FULL_LEVEL, title: 'Full reservoir level (spillway starts overflowing)' },
-    { label: 'Max flood', level: MAX_FLOOD, title: 'Highest design flood level' },
-    { label: 'Dam top', level: DAM_TOP, isStructural: true, title: 'Top of the dam' }
-  ];
+  const bed = specs?.deepestBedLevel_m ?? DEEPEST_BED;
+  const fullLevel = specs?.frl_m ?? FULL_LEVEL;
+  const floodLevel = specs?.mwl_m ?? MAX_FLOOD;
+  const damTop = specs ? specs.topOfDam_m : DAM_TOP;
+  const hasDam = damTop !== undefined;
+  const sliderMin = bed;
+  const sliderMax = hasDam ? damTop : fullLevel + 1.5;
+  const drawdown = specs?.mddl_m ?? 22;
 
-  const overSpillway = waterLevel > FULL_LEVEL;
-  const atDamTop = waterLevel >= 40.5;
+  const presets = hasDam
+    ? [
+        { label: 'Minimum', level: drawdown, title: 'Lowest level water is drawn down to' },
+        { label: 'Today', level: liveLevel, title: 'Current level from the gauge' },
+        { label: 'Full', level: fullLevel, title: 'Full reservoir level (spillway starts overflowing)' },
+        { label: 'Max flood', level: floodLevel, title: 'Highest design flood level' },
+        { label: 'Dam top', level: damTop, isStructural: true, title: 'Top of the dam' }
+      ]
+    : [
+        { label: 'Low', level: bed, title: 'Lowest modelled bed' },
+        { label: 'Full', level: fullLevel, title: 'Shoreline water surface' },
+        { label: 'High', level: Math.round((fullLevel + 1) * 100) / 100, title: 'Above the shoreline' }
+      ];
+
+  const overSpillway = waterLevel > fullLevel;
+  const atDamTop = hasDam && waterLevel >= damTop - 0.5;
 
   return (
     <div className="glass-panel" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -44,26 +62,26 @@ export const WaterLevelControl: React.FC<WaterLevelControlProps> = ({
         </span>
       </div>
       <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: -6 }}>
-        Drag to see how much water the dam holds at any level.
+        Drag to see how much water the {hasDam ? 'dam holds' : 'lake covers'} at any level.
       </span>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <input
           type="range"
-          min={DEEPEST_BED}
-          max={DAM_TOP}
+          min={sliderMin}
+          max={sliderMax}
           step={0.05}
           value={waterLevel}
           onChange={(e) => onWaterLevelChange(parseFloat(e.target.value))}
           style={{ width: '100%', accentColor: atDamTop ? '#f43f5e' : 'var(--accent-cyan)' }}
         />
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)' }}>
-          <span>Empty ({DEEPEST_BED} m)</span>
-          <span>Dam top ({DAM_TOP} m)</span>
+          <span>{hasDam ? `Empty (${bed.toFixed(1)} m)` : `Bed (${bed.toFixed(1)} m)`}</span>
+          <span>{hasDam ? `Dam top (${damTop.toFixed(1)} m)` : `High (${sliderMax.toFixed(1)} m)`}</span>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 5 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${presets.length}, 1fr)`, gap: 5 }}>
         {presets.map((p) => {
           const isActive = Math.abs(waterLevel - p.level) < 0.05;
           return (
@@ -98,7 +116,7 @@ export const WaterLevelControl: React.FC<WaterLevelControlProps> = ({
       {overSpillway && (
         <div style={{ background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.4)', borderRadius: 6, padding: '6px 10px', fontSize: 11, color: '#fcd34d', display: 'flex', alignItems: 'center', gap: 6 }}>
           <AlertTriangle size={14} color="#f59e0b" style={{ flexShrink: 0 }} />
-          <span>{atDamTop ? 'Water at the dam top: not possible in practice.' : 'Above full level: water spills over the spillway.'}</span>
+          <span>{atDamTop ? 'Water at the dam top: not possible in practice.' : hasDam ? 'Above full level: water spills over the spillway.' : 'Above the shoreline: water spreads onto the banks.'}</span>
         </div>
       )}
 
@@ -118,7 +136,7 @@ export const WaterLevelControl: React.FC<WaterLevelControlProps> = ({
         <div>
           <span style={{ color: 'var(--text-muted)' }}>Deepest point</span>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: '#ffffff', marginTop: 2 }}>
-            {Math.max(0, waterLevel - DEEPEST_BED).toFixed(1)} m
+            {Math.max(0, waterLevel - bed).toFixed(1)} m
           </div>
         </div>
       </div>

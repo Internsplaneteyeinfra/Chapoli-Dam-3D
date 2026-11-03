@@ -96,6 +96,8 @@ export interface DEMSummary {
   rawDemValidCells: number;
   rawDemTotalCells: number;
   contourLevels: number;
+  /** Subtracted before vertical exaggeration so high plateaus stay near the ground plane. 0 for Chapoli. */
+  verticalDatum_m?: number;
   sourceDtm?: string;
   f30Summary?: {
     source: string;

@@ -11,6 +11,8 @@ export interface SectionCapParams {
   waterDepthData?: WaterDepthPayload;
   waterVisible: boolean;
   waterLevel: number;
+  /** Metres removed from elevations before they are scaled. 0 keeps existing sites unchanged. */
+  verticalDatum?: number;
 }
 
 // Ground fill (sand/earth) from the section base up to the surface, as in a survey cross-section
@@ -60,6 +62,7 @@ export class SectionCap {
   public build(p: SectionCapParams) {
     this.clear();
     const ex = p.verticalExaggeration;
+    const datum = p.verticalDatum ?? 0;
     // Just inside the kept (x >= cutX) side so the renderer clip plane does not remove it
     const x = p.cutX + 0.3;
 
@@ -107,7 +110,7 @@ export class SectionCap {
         [z1, y0b, cBot], [z1, y1b, cTop], [z0, y1a, cTop]
       ] as const;
       for (const [z, y, c] of v) {
-        pos.push(x, y * ex, z);
+        pos.push(x, (y - datum) * ex, z);
         if (col && c) col.push(c.r, c.g, c.b);
       }
     };

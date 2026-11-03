@@ -76,10 +76,11 @@ export class WaterSurface {
     }
 
     const { width, height } = this.data.dem;
-    const waterY = this.options.waterLevel * this.options.verticalExaggeration;
+    const datum = this.data.dem.verticalDatum_m ?? 0;
+    const waterY = (this.options.waterLevel - datum) * this.options.verticalExaggeration;
 
-    // Lowest possible bed level is 15.50m (deepest basin thalweg)
-    if (this.options.waterLevel < 15.50) {
+    const deepestBed = this.data.baseline_specs?.deepestBedLevel_m ?? 15.5;
+    if (this.options.waterLevel < deepestBed) {
       return;
     }
 
@@ -122,11 +123,16 @@ export class WaterSurface {
           const tankProximity = c00.inTank || c10.inTank || c01.inTank || c11.inTank;
           if (!tankProximity) continue;
 
-          // Exclude quads downstream (west) of the 760m earthen dam alignment
           const quadX = (c00.localX + c10.localX + c01.localX + c11.localX) / 4;
           const quadZ = (c00.localZ + c10.localZ + c01.localZ + c11.localZ) / 4;
-          const damXAtZ = -468.0 + (quadZ - (-411.6)) * ((-389.8 - (-468.0)) / (353.2 - (-411.6)));
-          if (quadX < damXAtZ - 2.0) continue;
+          // Keep water on the reservoir side of the dam axis when this site has one.
+          const dam = this.data.dam_geometry;
+          if (dam) {
+            const [nx, nz] = dam.northAbutmentLocal;
+            const [sx, sz] = dam.southAbutmentLocal;
+            const damXAtZ = nx + (quadZ - nz) * ((sx - nx) / (sz - nz));
+            if (quadX < damXAtZ - 2.0) continue;
+          }
 
           // Triangle 1: (c00, c01, c10)
           const subCount1 = (c00.elevation <= wl ? 1 : 0) + (c01.elevation <= wl ? 1 : 0) + (c10.elevation <= wl ? 1 : 0);
